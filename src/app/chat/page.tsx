@@ -22,7 +22,6 @@ interface Message {
     text: string;
     properties?: any[];
     headline?: string;
-    suggestedQuestions?: string[];
 }
 
 function ChatContent() {
@@ -38,7 +37,6 @@ function ChatContent() {
     const [sessionHeadline, setSessionHeadline] = useState("New Chat");
     const [tabData, setTabData] = useState<Record<string, any>>({});
     const [tabLoading, setTabLoading] = useState<string | null>(null);
-    const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const hasInitialized = useRef(false);
 
@@ -256,20 +254,6 @@ function ChatContent() {
             setTimeout(() => sendMessage(CLIENT_BUY_BOXES[buyboxSlug].prompt), 300);
         } else if (freeQuery) {
             setTimeout(() => sendMessage(freeQuery), 300);
-        } else {
-            // Fetch starter questions from the API for fresh chats
-            fetch("/api/suggested-questions")
-                .then(res => res.json())
-                .then(data => {
-                    if (data.suggestedQuestions) setSuggestedQuestions(data.suggestedQuestions);
-                })
-                .catch(() => {
-                    setSuggestedQuestions([
-                        "Show me the best deals today",
-                        "What's new in Michigan real estate?",
-                        "Find me commercial properties"
-                    ]);
-                });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -324,13 +308,7 @@ function ChatContent() {
                 headline,
                 text: data.text || (hasProperties ? "Here's what I found." : ""),
                 properties: hasProperties ? properties : [],
-                suggestedQuestions: data.suggestedQuestions || [],
             };
-
-            // Update suggested questions state
-            if (data.suggestedQuestions && data.suggestedQuestions.length > 0) {
-                setSuggestedQuestions(data.suggestedQuestions);
-            }
 
             setMessages(prev => [...prev, newMsg]);
 
@@ -533,7 +511,6 @@ function ChatContent() {
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.3 + i * 0.08, duration: 0.4, ease: "easeOut" }}
                                         onClick={() => {
-                                            setSuggestedQuestions([]);
                                             sendMessage(card.prompt);
                                         }}
                                         className="group text-left p-5 border border-white bg-[#0A0A0A] hover:bg-[#141414] transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)]"
@@ -581,26 +558,7 @@ function ChatContent() {
 
                     {/* Floating Chat Command Bar */}
                     <div className="absolute bottom-6 left-0 right-0 px-6 z-10 flex flex-col items-center pointer-events-none gap-3">
-                        {/* Suggested Question Pills */}
-                        {suggestedQuestions.length > 0 && !isLoading && (
-                            <div className="max-w-4xl w-full flex flex-wrap gap-2 justify-center pointer-events-auto">
-                                {suggestedQuestions.map((q, i) => (
-                                    <motion.button
-                                        key={`${q}-${i}`}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: i * 0.1, duration: 0.3 }}
-                                        onClick={() => {
-                                            setSuggestedQuestions([]);
-                                            sendMessage(q);
-                                        }}
-                                        className="text-[12px] font-mono px-4 py-2 rounded-full bg-[#171717] border border-[#333] text-[#A3A3A3] hover:text-[#FAFAFA] hover:border-[#D4AF37]/50 hover:bg-[#1A1A1A] transition-all duration-200 hover:shadow-[0_0_12px_rgba(212,175,55,0.1)] active:scale-95"
-                                    >
-                                        {q}
-                                    </motion.button>
-                                ))}
-                            </div>
-                        )}
+
 
                         <div className={`relative max-w-4xl w-full flex items-center rounded-xl border transition-colors pointer-events-auto p-1.5 bg-[#0A0A0A] ${isLoading ? 'border-[#404040]' : 'border-border focus-within:border-[#404040]'}`}>
                             {isLoading && (

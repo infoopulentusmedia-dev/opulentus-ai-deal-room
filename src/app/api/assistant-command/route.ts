@@ -70,11 +70,8 @@ When answering questions about properties, reference their address, price, score
 RESPONSE FORMAT — return valid JSON:
 {
   "headline": "Short bold headline (3-6 words)",
-  "text": "Your conversational response",
-  "suggestedQuestions": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
-}
-
-ALWAYS include exactly 3 suggestedQuestions in your response. These should be natural follow-up questions the user might want to ask next, based on the conversation context. Make them specific and actionable.`;
+  "text": "Your conversational response"
+}`;
 
 
 const GENERAL_QA_SYSTEM = `You are Opulentus, a world-class Michigan real estate investment advisor with 20+ years of experience.
@@ -92,11 +89,8 @@ If the user's question could benefit from a property search, gently suggest they
 RESPONSE FORMAT — return valid JSON:
 {
   "headline": "Short bold headline (3-6 words)",
-  "text": "Your helpful response",
-  "suggestedQuestions": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
-}
-
-ALWAYS include exactly 3 suggestedQuestions in your response. These should be natural follow-up questions the user might want to ask next. Make them specific to Michigan real estate and actionable.`;
+  "text": "Your helpful response"
+}`;
 
 
 const PROPERTY_LOOKUP_SYSTEM = `You are Opulentus, a Michigan real estate investment advisor.
@@ -107,11 +101,8 @@ Keep it to 2-4 sentences.
 RESPONSE FORMAT — return valid JSON:
 {
   "headline": "Short headline about the property",
-  "text": "Your analysis of this specific property",
-  "suggestedQuestions": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
-}
-
-ALWAYS include exactly 3 suggestedQuestions. These should be natural follow-ups about this specific property (e.g., risks, negotiation, comparables).`;
+  "text": "Your analysis of this specific property"
+}`;
 
 
 // ──────────────────────────────────────────────────────────
@@ -334,9 +325,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
           intent: "general",
-          headline: response.headline || "Opulentus",
+          headline: "Opulentus",
           text: response.text || "Happy to help with any real estate questions.",
-          suggestedQuestions: response.suggestedQuestions || [],
           data: { properties: [] }
         });
       } catch (err) {
@@ -362,7 +352,6 @@ export async function POST(req: NextRequest) {
           intent: "followup",
           headline: response.headline || "Opulentus",
           text: response.text || "Let me look into that for you.",
-          suggestedQuestions: response.suggestedQuestions || [],
           data: { properties: [] }
         });
       } catch (err) {
@@ -425,7 +414,6 @@ Return valid JSON:
             intent: "property_lookup",
             headline: narrative.headline || "Property Found",
             text: narrative.text || "Here's what I found.",
-            suggestedQuestions: narrative.suggestedQuestions || [],
             dataSource,
             data: { properties: scoredProperties }
           });
@@ -506,28 +494,10 @@ Return valid JSON:
 
     const { scoredProperties, dataSource } = await searchApifyDB(plan.parameters, investmentIntent || "investor");
 
-    // Generate suggested questions for search results
-    let searchSuggestions: string[] = [];
-    if (scoredProperties.length > 0) {
-      const topProp = scoredProperties[0];
-      searchSuggestions = [
-        `Tell me more about ${topProp.address || 'the top result'}`,
-        `What are the risks on this deal?`,
-        scoredProperties.length > 1 ? `Compare the top ${Math.min(scoredProperties.length, 3)} results` : `Is this a good investment?`
-      ];
-    } else {
-      searchSuggestions = [
-        "Broaden my search criteria",
-        "What's trending in Michigan right now?",
-        "Show me the cheapest listings available"
-      ];
-    }
-
     return NextResponse.json({
       intent: "search",
       headline: plan.headline || `Found ${scoredProperties.length} matches`,
       nextBestAction: "open_deal_room",
-      suggestedQuestions: searchSuggestions,
       dataSource,
       data: { properties: scoredProperties }
     });
