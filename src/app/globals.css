@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* Nexflow Charcoal & Chalk Palette */
+  --color-background: #0A0A0A;
+  --color-foreground: #FAFAFA;
+
+  --color-card: #171717;
+  --color-card-foreground: #FAFAFA;
+
+  --color-surface: #242424;
+
+  /* Accent (Kept subtle gold for Opulentus branding, or can use #0099FF for pure Nexflow blue) */
+  --color-primary: #D4AF37;
+  --color-primary-foreground: #0A0A0A;
+
+  --color-muted: #171717;
+  --color-muted-foreground: #A3A3A3;
+
+  --color-border: #242424;
+  --color-accent: #242424;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+@layer base {
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, currentColor);
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Flat Panel Utilities (Nexflow Style) */
+@layer utilities {
+  .glass-panel {
+    @apply bg-card border border-border;
+  }
+
+  .glass-input {
+    @apply bg-[#0A0A0A] border border-border focus:border-[#404040] focus:ring-0 transition-colors;
+  }
+}
+
+/* Custom Scrollbar - Minimal & Dark */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Prose styling overrides */
+.prose {
+  color: var(--color-muted-foreground);
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  color: var(--color-foreground);
+  font-family: var(--font-display);
+}
+
+.prose a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
