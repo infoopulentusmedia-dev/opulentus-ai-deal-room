@@ -70,59 +70,6 @@ export async function POST(req: Request) {
             });
         }
 
-        // --- PRE-FILTER ENGINE ---
-        // To avoid Vercel timeouts and Gemini 429 (Resource Exhausted) errors, 
-        // we must not send 6MB of raw JSON to the AI.
-        // We will synthetically score the properties in JS and only send the top 15 "candidates" to Gemini.
-
-        const priceMin = parseInt(buybox.priceMin || "0") || 0;
-        const priceMax = parseInt(buybox.priceMax || "999999999") || 999999999;
-        const targetLocation = (buybox.location || "").toLowerCase();
-        const targetType = (buybox.propertyType || "").toLowerCase();
-
-        const scoredFeed = mergedFeed.map(prop => {
-            let score = 0;
-
-            // 1. Price Matching (up to 40 points)
-            if (prop.price && prop.price >= priceMin && prop.price <= priceMax) {
-                score += 40;
-            } else if (prop.price) {
-                // Partial credit for being somewhat close (e.g., a near miss)
-                const margin = priceMax * 0.2; // 20% over budget
-                if (prop.price <= priceMax + margin) score += 20;
-            }
-
-            // 2. Location Matching (up to 30 points)
-            const pLoc = `${prop.address} ${prop.city} ${prop.state} ${prop.zipCode}`.toLowerCase();
-            if (targetLocation && pLoc.includes(targetLocation.replace(" county", ""))) {
-                score += 30;
-            }
-
-            // 3. Type Matching (up to 30 points)
-            const pType = (prop.propertyType || "").toLowerCase();
-            if (targetType) {
-                // simple keyword intersection
-                const typeWords = targetType.replace(/[^a-z0-9]/g, ' ').split(' ').filter(Boolean);
-                let matchedWords = 0;
-                for (const w of typeWords) {
-                    if (pType.includes(w) || (prop.description && prop.description.toLowerCase().includes(w))) {
-                        matchedWords++;
-                    }
-                }
-                if (matchedWords > 0) {
-                    score += Math.min(30, (matchedWords / typeWords.length) * 30);
-                }
-            }
-
-            return { prop, score };
-        });
-
-        // Sort by JS heuristic score, descending
-        scoredFeed.sort((a, b) => b.score - a.score);
-
-        // Take only the top 15 properties to send to Gemini
-        const preFilteredFeed = scoredFeed.slice(0, 15).map(s => s.prop);
-
         // 4. Send to Gemini with the client's Buy Box
         const promptPayload = `
 Client: ${buybox.name}
@@ -137,8 +84,8 @@ Buy Box Criteria:
 - Special: ${buybox.specialCriteria || "None"}
 - Portfolio Holdings: ${buybox.portfolioHoldings || "No existing portfolio data."}
 
-Merged Property Feed (Top ${preFilteredFeed.length} properties pre-filtered for relevance):
-${JSON.stringify(preFilteredFeed, null, 2)}
+Merged Property Feed (${mergedFeed.length} properties from Crexi + LoopNet):
+${JSON.stringify(mergedFeed, null, 2)}
 `;
 
         const aiAnalysis = await generateAnalysis(MORNING_BRIEF_SYSTEM, promptPayload);
