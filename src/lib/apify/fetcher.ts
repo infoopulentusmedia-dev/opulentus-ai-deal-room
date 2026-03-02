@@ -7,10 +7,10 @@ const LOOPNET_TASK_ID = "RPSAB9EzBLJsxEeKm";
 
 async function fetchLatestDataset(taskId: string): Promise<any[]> {
     try {
-        const url = `https://api.apify.com/v2/actor-tasks/${taskId}/runs/last/dataset/items?format=json&clean=true`;
+        const url = `https://api.apify.com/v2/actor-tasks/${taskId}/runs/last/dataset/items?format=json&clean=true&limit=200`;
         const res = await fetch(url, {
             headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
-            next: { revalidate: 3600 } // Cache for 1 hour to avoid spamming Apify
+            cache: 'no-store' // Avoid Vercel's 2MB Edge Cache limit crash
         });
         if (!res.ok) {
             console.warn(`Apify fetch for ${taskId} failed with status ${res.status}. (Run might not exist yet).`);

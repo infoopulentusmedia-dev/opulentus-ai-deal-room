@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ApifyPropertyListing } from './apify/mockFeed';
 
-const IS_VERCEL = !!process.env.VERCEL;
+const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === "production";
 const DB_DIR = IS_VERCEL ? '/tmp/.data' : path.join(process.cwd(), '.data');
 const DB_FILE = path.join(DB_DIR, 'daily_scans.json');
 const DIGEST_CACHE_FILE = path.join(DB_DIR, 'daily_digests.json');
