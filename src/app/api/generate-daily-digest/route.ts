@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateAnalysis } from "@/lib/gemini/client";
 import { getLatestScan, getDigestCache, saveDigestCache } from "@/lib/db";
+import { getLiveApifyFeed } from "@/lib/apify/fetcher";
 import { checkTaxIncentives } from "@/app/api/tax-incentive-check/route";
 
 const DAILY_DIGEST_SYSTEM = `You are an elite Commercial Real Estate Acquisitions Director for Opulentus Private Wealth.
@@ -46,9 +47,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing buybox criteria." }, { status: 400 });
         }
 
-        // Extremely fast local DB read populated by the daily Cron job
-        const latestScan = getLatestScan();
-        const combinedFeed = latestScan ? latestScan.properties : [];
+        // Extremely fast live fetch from Apify Database instead of ephemeral Vercel local filesystem
+        const combinedFeed = await getLiveApifyFeed();
 
         if (combinedFeed.length === 0) {
             return NextResponse.json({

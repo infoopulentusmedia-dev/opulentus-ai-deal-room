@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateOrchestratorPlan, generateAnalysis } from "@/lib/gemini/client";
 import { evaluateDeal } from "@/lib/scoring";
 import { getLatestScan } from "@/lib/db";
+import { getLiveApifyFeed } from "@/lib/apify/fetcher";
 
 // ──────────────────────────────────────────────────────────
 // SYSTEM PROMPTS
@@ -161,10 +162,9 @@ function buildMarketSnapshot(): string {
   return snapshot;
 }
 
-/** Search the real Apify daily scan DB instead of mock data */
+/** Search the real live Apify feed instead of relying on broken Vercel filesystem cron data */
 async function searchApifyDB(parameters: any, investmentIntent: string, top: number = 10) {
-  const latestScan = getLatestScan();
-  let allProps = latestScan ? latestScan.properties : [];
+  const allProps = await getLiveApifyFeed();
   let dataSource = allProps.length > 0 ? "apify" : "empty";
 
   // Apply filters from the parsed parameters
