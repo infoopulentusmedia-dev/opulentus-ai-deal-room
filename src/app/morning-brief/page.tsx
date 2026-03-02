@@ -211,49 +211,39 @@ export default function MorningBriefPage() {
                                                             {result.properties.map((prop: any, idx: number) => {
                                                                 const badge = getSourceBadge(prop.platform);
                                                                 return (
-                                                                    <div key={`${prop.platform}-${prop.sourceId}-${idx}`} className="bg-[#0A0A0A] border border-[#242424] rounded-xl overflow-hidden hover:border-[#404040] transition-colors cursor-pointer" onClick={() => router.push(`/chat?apifyId=${prop.sourceId}&platform=${prop.platform}`)}>
-                                                                        <div className="flex">
-                                                                            {/* Image */}
-                                                                            <div className="w-40 h-32 bg-[#171717] shrink-0">
-                                                                                {prop.images?.[0] ? (
-                                                                                    <img src={prop.images[0]} alt={prop.address} className="w-full h-full object-cover opacity-80" />
-                                                                                ) : (
-                                                                                    <div className="w-full h-full flex items-center justify-center text-[10px] font-mono text-[#404040]">NO IMG</div>
-                                                                                )}
+                                                                    <div key={`${prop.platform}-${prop.sourceId}-${idx}`} className="bg-[#0A0A0A] border border-[#242424] rounded-xl overflow-hidden hover:border-[#D4AF37]/40 transition-all duration-200 cursor-pointer group" onClick={() => { sessionStorage.setItem('deal_room_transfer', JSON.stringify(prop)); router.push('/chat?transfer=true'); }}>
+                                                                        <div className="p-4">
+                                                                            <div className="flex items-start justify-between mb-2">
+                                                                                <div>
+                                                                                    <h4 className="font-display text-sm font-medium text-white">{prop.address}</h4>
+                                                                                    <p className="text-[11px] text-[#7C7C7C] mt-0.5">{prop.city}, {prop.state} {prop.zipCode}</p>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                                    <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${badge.color} uppercase tracking-wider`}>{badge.label}</span>
+                                                                                    {prop.aiMatchScore && (
+                                                                                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${prop.aiMatchScore >= 85 ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30'}`}>
+                                                                                            {prop.aiMatchScore}/100
+                                                                                        </span>
+                                                                                    )}
+                                                                                    <span className="text-[#7C7C7C] group-hover:text-[#D4AF37] transition-colors text-sm ml-1">→</span>
+                                                                                </div>
                                                                             </div>
-                                                                            {/* Content */}
-                                                                            <div className="flex-1 p-4">
-                                                                                <div className="flex items-start justify-between mb-2">
-                                                                                    <div>
-                                                                                        <h4 className="font-display text-sm font-medium text-white">{prop.address}</h4>
-                                                                                        <p className="text-[11px] text-[#7C7C7C] mt-0.5">{prop.city}, {prop.state} {prop.zipCode}</p>
-                                                                                    </div>
-                                                                                    <div className="flex items-center gap-2 shrink-0">
-                                                                                        <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${badge.color} uppercase tracking-wider`}>{badge.label}</span>
-                                                                                        {prop.aiMatchScore && (
-                                                                                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${prop.aiMatchScore >= 85 ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30'}`}>
-                                                                                                {prop.aiMatchScore}/100
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-4 text-[11px] font-mono text-[#A3A3A3] mb-2">
-                                                                                    <span className="text-green-400 font-medium">${prop.price?.toLocaleString() || "—"}</span>
-                                                                                    <span>{prop.propertyType}</span>
-                                                                                    {prop.buildingSizeSqft && <span>{prop.buildingSizeSqft.toLocaleString()} sf</span>}
-                                                                                </div>
-                                                                                {prop.aiReasoning && (
-                                                                                    <p className="text-xs text-[#A3A3A3] italic line-clamp-2 leading-relaxed">"{prop.aiReasoning}"</p>
+                                                                            <div className="flex items-center gap-4 text-[11px] font-mono text-[#A3A3A3] mb-2">
+                                                                                <span className="text-green-400 font-medium">${prop.price?.toLocaleString() || "—"}</span>
+                                                                                <span>{prop.propertyType}</span>
+                                                                                {prop.buildingSizeSqft && <span>{prop.buildingSizeSqft.toLocaleString()} sf</span>}
+                                                                            </div>
+                                                                            {prop.aiReasoning && (
+                                                                                <p className="text-xs text-[#A3A3A3] italic line-clamp-2 leading-relaxed">"{prop.aiReasoning}"</p>
+                                                                            )}
+                                                                            {/* Tax Incentive Badges */}
+                                                                            <div className="flex gap-2 mt-2">
+                                                                                {prop.taxIncentives?.isOpportunityZone && (
+                                                                                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">💰 OZ</span>
                                                                                 )}
-                                                                                {/* Tax Incentive Badges */}
-                                                                                <div className="flex gap-2 mt-2">
-                                                                                    {prop.taxIncentives?.isOpportunityZone && (
-                                                                                        <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">💰 OZ</span>
-                                                                                    )}
-                                                                                    {prop.taxIncentives?.isRenaissanceZone && (
-                                                                                        <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30">🏛️ RZ</span>
-                                                                                    )}
-                                                                                </div>
+                                                                                {prop.taxIncentives?.isRenaissanceZone && (
+                                                                                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30">🏛️ RZ</span>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     </div>
