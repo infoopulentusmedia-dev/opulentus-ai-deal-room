@@ -57,11 +57,32 @@ export function loadAllClients(): BuyBoxCriteria[] {
         if (stored) {
             try {
                 const clients: Record<string, BuyBoxCriteria> = JSON.parse(stored);
-                return Object.values(clients);
+                if (Object.keys(clients).length > 0) {
+                    return Object.values(clients);
+                }
             } catch (e) {
                 console.error("Failed to parse stored clients", e);
             }
         }
+
+        // If no clients exist (e.g. first time loading Vercel), seed default Ali Beydoun profile
+        const defaultClient: BuyBoxCriteria = {
+            id: "ali-beydoun",
+            name: "Ali Beydoun",
+            propertyType: "Strip Center / Retail Plaza",
+            transactionType: "Buy",
+            location: "Wayne County",
+            priceMin: "",
+            priceMax: "5000000",
+            sizeMin: "",
+            sizeMax: "",
+            specialCriteria: "Value-add opportunities, power centers, or distressed plazas.",
+            portfolioHoldings: ""
+        };
+
+        const clients = { [defaultClient.id]: defaultClient };
+        localStorage.setItem("opulentus_clients", JSON.stringify(clients));
+        return [defaultClient];
     }
     return [];
 }

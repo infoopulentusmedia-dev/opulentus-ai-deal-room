@@ -20,7 +20,10 @@ export interface HistoricalProperty {
     latestData: ApifyPropertyListing;
 }
 
-const HISTORY_FILE_PATH = path.join(process.cwd(), 'data', 'property_history.json');
+const IS_VERCEL = !!process.env.VERCEL;
+const HISTORY_FILE_PATH = IS_VERCEL
+    ? '/tmp/.data/property_history.json'
+    : path.join(process.cwd(), 'data', 'property_history.json');
 
 // Ensure the data directory exists
 function ensureDataDir() {
