@@ -65,7 +65,9 @@ export function loadAllClients(): BuyBoxCriteria[] {
             }
         }
 
-        // If no clients exist (e.g. first time loading Vercel), seed default Ali Beydoun profile
+        // If no clients exist (e.g. first time loading Vercel), return a single default Ali Beydoun profile
+        // CRITICAL: We DO NOT call localStorage.setItem here because this function runs during initial React Hydration.
+        // Calling a side-effect here will throw a fatal "Text content did not match server-rendered HTML" exception on Vercel.
         const defaultClient: BuyBoxCriteria = {
             id: "ali-beydoun",
             name: "Ali Beydoun",
@@ -80,8 +82,6 @@ export function loadAllClients(): BuyBoxCriteria[] {
             portfolioHoldings: ""
         };
 
-        const clients = { [defaultClient.id]: defaultClient };
-        localStorage.setItem("opulentus_clients", JSON.stringify(clients));
         return [defaultClient];
     }
     return [];
