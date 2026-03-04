@@ -70,7 +70,9 @@ export default function Home() {
   const [searchInput, setSearchInput] = useState("");
 
   useEffect(() => {
+    // Only fetch from localStorage after component mounts on client to avoid hydration mismatch
     setRecentSessions(loadSessions());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = () => {

@@ -1,34 +1,28 @@
 import { NextResponse } from "next/server";
-import { getLatestScan } from "@/lib/db";
+import { getLiveApifyFeed } from "@/lib/apify/fetcher";
 
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const source = searchParams.get("source");
 
-        // Instantly read today's locked-in database snapshot instead of live fetching
-        const latestScan = getLatestScan();
-        const allProperties = latestScan ? latestScan.properties : [];
-
-        if (source === "crexi") {
-            const data = allProperties.filter(p => p.platform === "crexi");
-            return NextResponse.json({ source: "crexi", properties: data });
+        if (!source || !["crexi", "loopnet", "mls"].includes(source)) {
+            return NextResponse.json({ error: "Invalid source parameter. Use ?source=crexi|loopnet|mls" }, { status: 400 });
         }
 
-        if (source === "loopnet") {
-            const data = allProperties.filter(p => p.platform === "loopnet");
-            return NextResponse.json({ source: "loopnet", properties: data });
-        }
+        // We leverage getLiveApifyFeed to perform the live fetches, map the schemas securely, 
+        // and populate the local DB instantly.
+        console.log(`[Scrape Route] User triggered manual live sync for: ${source}`);
+        const allProperties = await getLiveApifyFeed();
 
-        if (source === "mls") {
-            const data = allProperties.filter(p => p.platform === "mls");
-            return NextResponse.json({ source: "mls", properties: data });
-        }
+        // Filter the newly captured dataset down to just the requested source for the frontend table
+        const filteredData = allProperties.filter(p => p.platform === source);
+        console.log(`[Scrape Route] Returning ${filteredData.length} records for ${source}`);
 
-        return NextResponse.json({ error: "Invalid or missing source parameter. Use ?source=crexi|loopnet|mls" }, { status: 400 });
+        return NextResponse.json({ source, properties: filteredData });
 
     } catch (err: any) {
-        console.error("[Scrape API] Error:", err.message);
+        console.error("[Scrape API Route] Error:", err.message);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }

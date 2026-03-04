@@ -1,5 +1,7 @@
 import { ApifyPropertyListing } from "./mockFeed";
 import { recordSnapshot, loadHistoryDB } from "./historyStore";
+import { fetchRealCompProperties } from "../realcomp/api";
+import { isRealcompCompliant, mapRealcompProperty } from "../realcomp/mapper";
 
 const APIFY_TOKEN = process.env.APIFY_API_TOKEN || "";
 const CREXI_TASK_ID = "QGmMEd7ThXGV45NTp";
@@ -194,12 +196,19 @@ export async function getLoopNetFeed(): Promise<ApifyPropertyListing[]> {
 }
 
 export async function getLiveApifyFeed(): Promise<ApifyPropertyListing[]> {
-    const [crexiData, loopNetData] = await Promise.all([
+    const [crexiData, loopNetData, rcRawData] = await Promise.all([
         fetchLatestDataset(CREXI_TASK_ID),
-        fetchLatestDataset(LOOPNET_TASK_ID)
+        fetchLatestDataset(LOOPNET_TASK_ID),
+        fetchRealCompProperties({ top: 200 }).catch(e => { console.error("Realcomp live fetch failed:", e); return { value: [] }; })
     ]);
 
     const listings: ApifyPropertyListing[] = [];
+
+    // Normalize Realcomp
+    const realcompListings: ApifyPropertyListing[] = (rcRawData.value || [])
+        .filter(isRealcompCompliant)
+        .map(mapRealcompProperty);
+    listings.push(...realcompListings);
 
     // Normalize Crexi
     for (const item of crexiData) {

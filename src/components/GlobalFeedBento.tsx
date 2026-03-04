@@ -24,13 +24,15 @@ export default function GlobalFeedBento() {
     const [properties, setProperties] = useState<ScrapedProperty[]>([]);
     const [isScraping, setIsScraping] = useState<Record<string, boolean>>({
         crexi: false,
-        loopnet: false
+        loopnet: false,
+        mls: false
     });
 
     // Stats for Bento Boxes
     const [stats, setStats] = useState({
         crexi: 0,
-        loopnet: 0
+        loopnet: 0,
+        mls: 0
     });
 
     // Fetch initial data on mount (cached or quick fetch)
@@ -41,15 +43,16 @@ export default function GlobalFeedBento() {
 
     useEffect(() => {
         // Recalculate stats whenever properties change
-        const currentStats = { crexi: 0, loopnet: 0 };
+        const currentStats = { crexi: 0, loopnet: 0, mls: 0 };
         properties.forEach(p => {
             if (p.platform === "crexi") currentStats.crexi++;
             else if (p.platform === "loopnet") currentStats.loopnet++;
+            else if (p.platform === "mls") currentStats.mls++;
         });
         setStats(currentStats);
     }, [properties]);
 
-    const handleScrape = async (source: "crexi" | "loopnet") => {
+    const handleScrape = async (source: "crexi" | "loopnet" | "mls") => {
         setIsScraping(prev => ({ ...prev, [source]: true }));
         try {
             const res = await fetch(`/api/scrape?source=${source}`);
@@ -72,6 +75,7 @@ export default function GlobalFeedBento() {
     const handleSyncAll = async () => {
         handleScrape("crexi");
         handleScrape("loopnet");
+        handleScrape("mls");
     };
 
     const handleRowClick = (prop: ScrapedProperty) => {
@@ -84,6 +88,7 @@ export default function GlobalFeedBento() {
         switch (platform) {
             case "crexi": return { label: "CREXI", icon: "🔴", color: "bg-red-500/10 text-red-400 border-red-500/30", btnColor: "bg-[#2A1111] hover:bg-[#3D1A1A] text-red-500 border border-red-500/20" };
             case "loopnet": return { label: "LOOPNET", icon: "🔵", color: "bg-blue-500/10 text-blue-400 border-blue-500/30", btnColor: "bg-[#0A1B2E] hover:bg-[#0F2942] text-blue-500 border border-blue-500/20" };
+            case "mls": return { label: "LOCAL MLS", icon: "🟡", color: "bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30", btnColor: "bg-[#2B230B] hover:bg-[#3B3010] text-[#D4AF37] border border-[#D4AF37]/20" };
             default: return { label: platform.toUpperCase(), icon: "⚪", color: "bg-[#242424] text-[#A3A3A3] border-[#333]", btnColor: "bg-[#171717] hover:bg-[#242424] text-[#A3A3A3] border border-[#333]" };
         }
     };
@@ -101,8 +106,8 @@ export default function GlobalFeedBento() {
                     <p className="text-xs font-mono text-[#A3A3A3] mt-2 uppercase tracking-wider">Scrape Apify Data Sources</p>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    {(["loopnet", "crexi"] as const).map(source => {
+                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                    {(["loopnet", "crexi", "mls"] as const).map(source => {
                         const loading = isScraping[source];
                         const formatting = getSourceBadge(source);
                         return (
@@ -135,14 +140,22 @@ export default function GlobalFeedBento() {
                         <p className="text-[10px] font-mono text-[#7C7C7C] uppercase tracking-widest mb-1">Active LoopNet Deals</p>
                         <p className="text-3xl font-display font-medium text-white">{isScraping.loopnet ? <span className="text-[#333] animate-pulse">---</span> : stats.loopnet}</p>
                     </div>
-                    <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-xl">🔵</div>
+                    <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl">🔵</div>
                 </div>
                 <div className="bg-[#171717] border border-[#242424] rounded-xl p-5 flex items-center justify-between">
                     <div>
                         <p className="text-[10px] font-mono text-[#7C7C7C] uppercase tracking-widest mb-1">Active Crexi Deals</p>
                         <p className="text-3xl font-display font-medium text-white">{isScraping.crexi ? <span className="text-[#333] animate-pulse">---</span> : stats.crexi}</p>
                     </div>
-                    <div className="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-xl">🔴</div>
+                    <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-xl">🔴</div>
+                </div>
+                <div className="bg-[#171717] border border-[#242424] rounded-xl p-5 flex items-center justify-between relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4AF37]/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                    <div className="relative z-10">
+                        <p className="text-[10px] font-mono text-[#D4AF37]/80 uppercase tracking-widest mb-1">Local MLS Feeds</p>
+                        <p className="text-3xl font-display font-medium text-white">{isScraping.mls ? <span className="text-[#333] animate-pulse">---</span> : stats.mls}</p>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex items-center justify-center text-xl relative z-10">🟡</div>
                 </div>
             </div>
 

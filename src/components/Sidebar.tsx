@@ -93,17 +93,18 @@ export default function Sidebar() {
     const [clients, setClients] = useState<BuyBoxCriteria[]>([]);
     const [personalBuyBox, setPersonalBuyBox] = useState<BuyBoxCriteria | null>(null);
 
-    // Hide sidebar on public shared links
-    if (pathname.startsWith('/shared')) {
-        return null;
-    }
-
     // Load clients on mount and when wizard closes
     useEffect(() => {
         setMounted(true);
         setClients(loadAllClients());
         setPersonalBuyBox(loadPersonalBuyBox());
     }, [wizardOpen]);
+
+    // Hide sidebar on public shared links
+    if (pathname.startsWith('/shared')) {
+        return null;
+    }
+
 
     return (
         <>
