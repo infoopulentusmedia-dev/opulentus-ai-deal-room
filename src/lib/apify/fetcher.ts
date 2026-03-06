@@ -250,17 +250,17 @@ export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "a
             platform: "crexi",
             sourceId: `CRX-${item.id}`,
             propertyUrl: `https://www.crexi.com/properties/${item.activeCrexiAssetId || item.id}`,
-            address: item.address?.street || item.address?.full || "Unknown Address",
-            city: item.address?.city || "",
-            state: item.address?.state || "",
-            zipCode: item.address?.zip || "",
+            address: item.name || item.location?.address || item.location?.fullAddress || "Unknown Address",
+            city: item.location?.city || "",
+            state: item.location?.state?.code || item.location?.state?.name || item.location?.state || "",
+            zipCode: item.location?.zip || "",
             price: price || null,
             propertyType: propertyType,
-            buildingSizeSqft: null,
+            buildingSizeSqft: item.rentableSqftMin || item.rentableSqftMax || null,
             lotSizeAcres: null,
             capRate: null,
             description: item.description || "",
-            images: item.media ? item.media.map((m: any) => m.imageUrl).filter(Boolean) : [],
+            images: item.thumbnailUrl ? [item.thumbnailUrl] : (item.media ? item.media.map((m: any) => m.imageUrl).filter(Boolean) : []),
             daysOnPlatform: 0
         });
     }
