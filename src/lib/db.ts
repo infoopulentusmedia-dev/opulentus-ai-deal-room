@@ -26,15 +26,21 @@ function initDB() {
     }
 }
 
+// Memory Cache for Vercel Serverless
+let memoryScans: DailyScanRecord[] = [];
+let memoryDigest: Record<string, any> = {};
+
 // Read all historical scans
 export function readAllScans(): DailyScanRecord[] {
+    if (IS_VERCEL) return memoryScans;
+
     try {
         initDB();
         const data = fs.readFileSync(DB_FILE, 'utf-8');
         return JSON.parse(data) as DailyScanRecord[];
     } catch (e) {
         console.error("Failed to read DB:", e);
-        return [];
+        return memoryScans;
     }
 }
 
@@ -50,7 +56,7 @@ export function getLatestScan(): DailyScanRecord | null {
 
 // Save a new scan to the persistent JSON file
 export function saveDailyScan(properties: ApifyPropertyListing[]): DailyScanRecord {
-    const scans = readAllScans();
+    let scans = readAllScans();
 
     // YYYY-MM-DD format
     const today = new Date().toISOString().split('T')[0];
@@ -75,7 +81,17 @@ export function saveDailyScan(properties: ApifyPropertyListing[]): DailyScanReco
         }
     }
 
-    fs.writeFileSync(DB_FILE, JSON.stringify(scans, null, 2), 'utf-8');
+    if (IS_VERCEL) {
+        memoryScans = scans;
+    } else {
+        try {
+            fs.writeFileSync(DB_FILE, JSON.stringify(scans, null, 2), 'utf-8');
+        } catch (e) {
+            console.warn(`[DB] Failed to save DB_FILE on local execution context:`, e);
+            memoryScans = scans;
+        }
+    }
+
     return newRecord;
 }
 
@@ -84,23 +100,31 @@ export function saveDailyScan(properties: ApifyPropertyListing[]): DailyScanReco
 // ─────────────────────────────────────────────────────────────────
 
 export function getDigestCache(clientId: string, date: string): any | null {
+    const key = `${clientId}_${date}`;
+    if (IS_VERCEL) return memoryDigest[key] || null;
+
     try {
         initDB();
         const data = fs.readFileSync(DIGEST_CACHE_FILE, 'utf-8');
         const cache = JSON.parse(data);
-        const key = `${clientId}_${date}`;
         return cache[key] || null;
     } catch (e) {
-        return null;
+        return memoryDigest[key] || null;
     }
 }
 
 export function saveDigestCache(clientId: string, date: string, digestData: any) {
+    const key = `${clientId}_${date}`;
+
+    if (IS_VERCEL) {
+        memoryDigest[key] = digestData;
+        return;
+    }
+
     try {
         initDB();
         const data = fs.readFileSync(DIGEST_CACHE_FILE, 'utf-8');
         const cache = JSON.parse(data);
-        const key = `${clientId}_${date}`;
 
         cache[key] = digestData;
 
@@ -113,5 +137,6 @@ export function saveDigestCache(clientId: string, date: string, digestData: any)
         fs.writeFileSync(DIGEST_CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
     } catch (e) {
         console.error("Failed to save digest cache", e);
+        memoryDigest[key] = digestData;
     }
 }
