@@ -195,17 +195,34 @@ export async function getLoopNetFeed(): Promise<ApifyPropertyListing[]> {
     });
 }
 
-export async function getLiveApifyFeed(): Promise<ApifyPropertyListing[]> {
-    const [crexiData, loopNetData, rcRawData] = await Promise.all([
-        fetchLatestDataset(CREXI_TASK_ID),
-        fetchLatestDataset(LOOPNET_TASK_ID),
-        fetchRealCompProperties({ top: 200 }).catch(e => { console.error("Realcomp live fetch failed:", e); return { value: [] }; })
-    ]);
+export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "all"): Promise<ApifyPropertyListing[]> {
+    const promises: Promise<any>[] = [];
+
+    // Always fetch Crexi and Loopnet if they are requested or if 'all' or empty
+    if (!source || source === "all" || source === "crexi") {
+        promises.push(fetchLatestDataset(CREXI_TASK_ID).catch(() => []));
+    } else {
+        promises.push(Promise.resolve([]));
+    }
+
+    if (!source || source === "all" || source === "loopnet") {
+        promises.push(fetchLatestDataset(LOOPNET_TASK_ID).catch(() => []));
+    } else {
+        promises.push(Promise.resolve([]));
+    }
+
+    if (!source || source === "all" || source === "mls") {
+        promises.push(fetchRealCompProperties({ top: 200 }).catch(e => { console.error("Realcomp fetch failed:", e); return { value: [] }; }));
+    } else {
+        promises.push(Promise.resolve({ value: [] }));
+    }
+
+    const [crexiData, loopNetData, rcRawData] = await Promise.all(promises);
 
     const listings: ApifyPropertyListing[] = [];
 
     // Normalize Realcomp
-    const realcompListings: ApifyPropertyListing[] = (rcRawData.value || [])
+    const realcompListings: ApifyPropertyListing[] = (rcRawData?.value || [])
         .filter(isRealcompCompliant)
         .map(mapRealcompProperty);
     listings.push(...realcompListings);

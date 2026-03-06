@@ -13,7 +13,7 @@ export async function GET(req: Request) {
         // We leverage getLiveApifyFeed to perform the live fetches, map the schemas securely, 
         // and populate the local DB instantly.
         console.log(`[Scrape Route] User triggered manual live sync for: ${source}`);
-        const allProperties = await getLiveApifyFeed();
+        const allProperties = await getLiveApifyFeed(source as "crexi" | "loopnet" | "mls" | "all");
 
         if (source === "all") {
             console.log(`[Scrape Route] Returning all ${allProperties.length} records`);
