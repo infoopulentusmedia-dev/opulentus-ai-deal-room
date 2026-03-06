@@ -73,9 +73,19 @@ export default function GlobalFeedBento() {
     };
 
     const handleSyncAll = async () => {
-        handleScrape("crexi");
-        handleScrape("loopnet");
-        handleScrape("mls");
+        setIsScraping({ crexi: true, loopnet: true, mls: true });
+        try {
+            const res = await fetch(`/api/scrape?source=all`);
+            const data = await res.json();
+
+            if (data.properties) {
+                setProperties(data.properties);
+            }
+        } catch (err) {
+            console.error(`Failed to sync all:`, err);
+        } finally {
+            setIsScraping({ crexi: false, loopnet: false, mls: false });
+        }
     };
 
     const handleRowClick = (prop: ScrapedProperty) => {
@@ -166,7 +176,7 @@ export default function GlobalFeedBento() {
                     <span className="text-[10px] font-mono text-[#7C7C7C] uppercase tracking-wider">Click Any Row For AI Deal Room</span>
                 </div>
 
-                {properties.length === 0 && !isScraping.crexi && !isScraping.loopnet ? (
+                {properties.length === 0 && !isScraping.crexi && !isScraping.loopnet && !isScraping.mls ? (
                     <div className="flex-1 flex flex-col items-center justify-center py-24 text-center">
                         <span className="text-4xl mb-4">📭</span>
                         <h4 className="text-lg font-display text-white mb-2">No Properties Loaded</h4>

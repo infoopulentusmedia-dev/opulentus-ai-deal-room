@@ -58,7 +58,7 @@ export async function fetchRealCompProperties({ top = 5, skip = 0, filter = '' }
             'OData-Version': '4.0',
             'OData-MaxVersion': '4.0'
         },
-        next: { revalidate: 86400 } // Cache exactly 24 hours to enforce 1-scrape-per-day limit
+        cache: 'no-store' // Avoid Vercel's 2MB Edge Cache limit crash
     });
 
     if (!response.ok) {
