@@ -228,11 +228,17 @@ ${JSON.stringify(analysisBatch, null, 2)}
 
         // Test a sample of image URLs (limit to 10)
         for (const deal of propsWithImages.slice(0, 10)) {
-            const rawImg = deal.images[0];
-            // Normalize: could be a string URL or an object {url, type, caption}
-            let imgUrl = typeof rawImg === 'string' ? rawImg : (rawImg?.url || rawImg?.imageUrl || '');
-            // LoopNet images have {s} size placeholder
-            imgUrl = imgUrl.replace('{s}', '674x462');
+            let imgUrl = '';
+            const mapKey = process.env.GOOGLE_MAPS_API_KEY;
+            const fullAddress = `${deal.address || ''}, ${deal.city || ''}, ${deal.state || 'MI'}`.trim();
+            const encodedAddress = encodeURIComponent(fullAddress);
+
+            if (mapKey && deal.address && deal.address.toLowerCase() !== 'unknown' && deal.address.toLowerCase() !== 'off market') {
+                imgUrl = `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${encodedAddress}&key=${mapKey}`;
+            } else {
+                const encodedPlaceholder = encodeURIComponent(deal.address || 'Property Listing');
+                imgUrl = `https://placehold.co/600x300/171717/D4AF37/png?text=${encodedPlaceholder}`;
+            }
 
             if (!imgUrl || !imgUrl.startsWith('http')) {
                 imageResults.push({
