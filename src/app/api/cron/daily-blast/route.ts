@@ -11,7 +11,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 // Sender must be the verified Single Sender in SendGrid
 const FROM_EMAIL = "info.opulentusmedia@gmail.com";
 const FROM_NAME = "Opulentus AI";
-const TARGET_EMAIL = "safat@safatautomation.com";
+const TARGET_EMAIL = "Opulentosmedia@gmail.com";
 
 export async function POST(req: Request) {
     try {
@@ -256,7 +256,7 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
     const msg = {
         to: targetEmail,
         from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `🔥 ${totalDeals} Deals Routed across ${groupedResults.length} Clients - Opulentus AI`,
+        subject: `Opulentus AI | ${totalDeals} Deals Routed across ${groupedResults.length} Clients`,
         text: `Opulentus Client Deal Router\n\n${plainText}\n\n---\nOpulentus 2026. All rights reserved.`,
         html: htmlBody,
     };
