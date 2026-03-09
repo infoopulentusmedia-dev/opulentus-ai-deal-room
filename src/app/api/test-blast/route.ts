@@ -234,8 +234,23 @@ ${JSON.stringify(analysisBatch, null, 2)}
             const encodedAddress = encodeURIComponent(fullAddress);
 
             if (mapKey && deal.address && deal.address.toLowerCase() !== 'unknown' && deal.address.toLowerCase() !== 'off market') {
-                imgUrl = `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${encodedAddress}&key=${mapKey}`;
-            } else {
+                try {
+                    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${encodedAddress}&key=${mapKey}`;
+                    const metaRes = await fetch(metaUrl);
+                    const metaData = await metaRes.json();
+
+                    if (metaData.status === 'OK') {
+                        imgUrl = `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${encodedAddress}&key=${mapKey}`;
+                    } else {
+                        const markerFormat = encodeURIComponent(`color:0xD4AF37|${fullAddress}`);
+                        imgUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddress}&zoom=18&size=600x300&maptype=hybrid&markers=${markerFormat}&key=${mapKey}`;
+                    }
+                } catch (e) {
+                    // Fallthrough
+                }
+            }
+
+            if (!imgUrl) {
                 const encodedPlaceholder = encodeURIComponent(deal.address || 'Property Listing');
                 imgUrl = `https://placehold.co/600x300/171717/D4AF37/png?text=${encodedPlaceholder}`;
             }

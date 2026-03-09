@@ -153,7 +153,14 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
                 }
             }
 
-            // 2. Fallback to dynamic address placeholder if no API key, dummy address, or NO IMAGERY FOUND
+            // 2. Fallback to Google Maps Static (Satellite + Map hybrid) if Street View has NO IMAGERY
+            // This is the industry standard fallback (Option 1 + Option 2 combined)
+            if (!heroImage && mapKey && p.address && p.address.toLowerCase() !== 'unknown' && p.address.toLowerCase() !== 'off market') {
+                const markerFormat = encodeURIComponent(`color:0xD4AF37|${fullAddress}`);
+                heroImage = `https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddress}&zoom=18&size=600x300&maptype=hybrid&markers=${markerFormat}&key=${mapKey}`;
+            }
+
+            // 3. Absolute Last Resort Fallback (If address is totally invalid or no API key)
             if (!heroImage) {
                 const encodedPlaceholder = encodeURIComponent(p.address || 'Property Listing');
                 heroImage = `https://placehold.co/600x300/171717/D4AF37/png?text=${encodedPlaceholder}`;
