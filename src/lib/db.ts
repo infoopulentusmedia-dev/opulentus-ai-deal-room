@@ -1,11 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import { ApifyPropertyListing } from './apify/mockFeed';
-
-const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === "production";
-const DB_DIR = IS_VERCEL ? '/tmp/.data' : path.join(process.cwd(), '.data');
-const DB_FILE = path.join(DB_DIR, 'daily_scans.json');
-const DIGEST_CACHE_FILE = path.join(DB_DIR, 'daily_digests.json');
+import { supabaseAdmin } from './supabase';
 
 export interface DailyScanRecord {
     date: string; // YYYY-MM-DD
@@ -13,40 +7,51 @@ export interface DailyScanRecord {
     properties: ApifyPropertyListing[];
 }
 
-// Ensure the database files exist
-function initDB() {
-    if (!fs.existsSync(DB_DIR)) {
-        fs.mkdirSync(DB_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify([]), 'utf-8');
-    }
-    if (!fs.existsSync(DIGEST_CACHE_FILE)) {
-        fs.writeFileSync(DIGEST_CACHE_FILE, JSON.stringify({}), 'utf-8');
-    }
-}
-
-// Memory Cache for Vercel Serverless
-let memoryScans: DailyScanRecord[] = [];
+// Memory Cache for Vercel Serverless (Digests only for now)
 let memoryDigest: Record<string, any> = {};
 
-// Read all historical scans
-export function readAllScans(): DailyScanRecord[] {
-    if (IS_VERCEL) return memoryScans;
-
+// Read all historical scans from Supabase
+export async function readAllScans(): Promise<DailyScanRecord[]> {
     try {
-        initDB();
-        const data = fs.readFileSync(DB_FILE, 'utf-8');
-        return JSON.parse(data) as DailyScanRecord[];
+        const { data: scans, error } = await supabaseAdmin
+            .from('daily_scans')
+            .select('*')
+            .order('inserted_at', { ascending: false });
+
+        if (error || !scans) {
+            console.error("Supabase fetch error:", error);
+            return [];
+        }
+
+        // We need to fetch the actual properties for these scans
+        // But for performance, if we just want the list of dates, we could optimize this.
+        // For now we'll just reconstruct the schema to match the frontend expectations.
+        const records: DailyScanRecord[] = [];
+
+        for (const scan of scans) {
+            // Fetch properties for this scan
+            const { data: props } = await supabaseAdmin
+                .from('properties')
+                .select('property_data_json')
+                .in('id', scan.property_ids);
+
+            records.push({
+                date: scan.date,
+                timestamp: new Date(scan.inserted_at).getTime(),
+                properties: props ? props.map((p: any) => p.property_data_json) : []
+            });
+        }
+
+        return records;
     } catch (e) {
         console.error("Failed to read DB:", e);
-        return memoryScans;
+        return [];
     }
 }
 
 // Get the scan for today, or the most recent day available
-export function getLatestScan(): DailyScanRecord | null {
-    const scans = readAllScans();
+export async function getLatestScan(): Promise<DailyScanRecord | null> {
+    const scans = await readAllScans();
     if (scans.length === 0) return null;
 
     // Sort by timestamp descending
@@ -54,89 +59,62 @@ export function getLatestScan(): DailyScanRecord | null {
     return scans[0];
 }
 
-// Save a new scan to the persistent JSON file
-export function saveDailyScan(properties: ApifyPropertyListing[]): DailyScanRecord {
-    let scans = readAllScans();
-
-    // YYYY-MM-DD format
+// Save a new scan to Supabase Postgres
+export async function saveDailyScan(properties: ApifyPropertyListing[]): Promise<DailyScanRecord> {
     const today = new Date().toISOString().split('T')[0];
 
-    const newRecord: DailyScanRecord = {
+    // 1. Upsert all properties into the `properties` table
+    const propertyRecords = properties.map(p => ({
+        id: p.sourceId,
+        platform: p.platform,
+        address: p.address,
+        price: typeof p.price === 'number' ? p.price : null,
+        property_type: p.propertyType,
+        property_data_json: p
+    }));
+
+    // Upsert properties (ignore if exists, or update)
+    const { error: propErr } = await supabaseAdmin
+        .from('properties')
+        .upsert(propertyRecords, { onConflict: 'id' });
+
+    if (propErr) {
+        console.error("Failed to upsert properties:", propErr);
+    }
+
+    // 2. Log the daily scan with the array of property IDs
+    const propertyIds = properties.map(p => p.sourceId);
+
+    const { error: scanErr } = await supabaseAdmin
+        .from('daily_scans')
+        .upsert({
+            date: today,
+            property_ids: propertyIds,
+            inserted_at: new Date().toISOString()
+        }, { onConflict: 'date' });
+
+    if (scanErr) {
+        console.error("Failed to upsert daily scan:", scanErr);
+    }
+
+    return {
         date: today,
         timestamp: Date.now(),
         properties: properties
     };
-
-    // Replace if same day, otherwise push
-    const existingIndex = scans.findIndex(s => s.date === today);
-    if (existingIndex >= 0) {
-        scans[existingIndex] = newRecord;
-    } else {
-        scans.push(newRecord);
-
-        // Keep max 30 days of history to avoid huge files
-        if (scans.length > 30) {
-            scans.sort((a, b) => b.timestamp - a.timestamp);
-            scans.length = 30; // Truncate
-        }
-    }
-
-    if (IS_VERCEL) {
-        memoryScans = scans;
-    } else {
-        try {
-            fs.writeFileSync(DB_FILE, JSON.stringify(scans, null, 2), 'utf-8');
-        } catch (e) {
-            console.warn(`[DB] Failed to save DB_FILE on local execution context:`, e);
-            memoryScans = scans;
-        }
-    }
-
-    return newRecord;
 }
 
 // ─────────────────────────────────────────────────────────────────
 // DIGEST CACHE (Saves Gemini AI costs and load times)
+// Note: Keeping in memory for now. Moving to DB is optional.
 // ─────────────────────────────────────────────────────────────────
 
 export function getDigestCache(clientId: string, date: string): any | null {
     const key = `${clientId}_${date}`;
-    if (IS_VERCEL) return memoryDigest[key] || null;
-
-    try {
-        initDB();
-        const data = fs.readFileSync(DIGEST_CACHE_FILE, 'utf-8');
-        const cache = JSON.parse(data);
-        return cache[key] || null;
-    } catch (e) {
-        return memoryDigest[key] || null;
-    }
+    return memoryDigest[key] || null;
 }
 
 export function saveDigestCache(clientId: string, date: string, digestData: any) {
     const key = `${clientId}_${date}`;
-
-    if (IS_VERCEL) {
-        memoryDigest[key] = digestData;
-        return;
-    }
-
-    try {
-        initDB();
-        const data = fs.readFileSync(DIGEST_CACHE_FILE, 'utf-8');
-        const cache = JSON.parse(data);
-
-        cache[key] = digestData;
-
-        // simple cleanup if cache gets too big (>100 keys)
-        const keys = Object.keys(cache);
-        if (keys.length > 100) {
-            delete cache[keys[0]]; // remove oldest since object keys implicitly retain insertion order roughly
-        }
-
-        fs.writeFileSync(DIGEST_CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
-    } catch (e) {
-        console.error("Failed to save digest cache", e);
-        memoryDigest[key] = digestData;
-    }
+    memoryDigest[key] = digestData;
 }

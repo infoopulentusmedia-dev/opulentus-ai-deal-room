@@ -49,17 +49,31 @@ export async function fetchRealCompProperties({ top = 5, skip = 0, filter = '' }
 
     console.log('[RealComp] Fetching:', propertyUrl.toString());
 
-    const response = await fetch(propertyUrl.toString(), {
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            // RESO Web API requires OData-Version header to be specified
-            'OData-Version': '4.0',
-            'OData-MaxVersion': '4.0'
-        },
-        cache: 'no-store' // Avoid Vercel's 2MB Edge Cache limit crash
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    let response;
+    try {
+        response = await fetch(propertyUrl.toString(), {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                // RESO Web API requires OData-Version header to be specified
+                'OData-Version': '4.0',
+                'OData-MaxVersion': '4.0'
+            },
+            cache: 'no-store', // Avoid Vercel's 2MB Edge Cache limit crash
+            signal: controller.signal
+        });
+    } catch (e: any) {
+        if (e.name === 'AbortError') {
+            throw new Error('RealComp API request timed out after 10 seconds');
+        }
+        throw e;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
         const errText = await response.text();

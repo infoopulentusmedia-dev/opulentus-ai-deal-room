@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateOrchestratorPlan, generateAnalysis } from "@/lib/gemini/client";
 import { evaluateDeal } from "@/lib/scoring";
 import { getLatestScan } from "@/lib/db";
-import { getLiveApifyFeed } from "@/lib/apify/fetcher";
-
 // ──────────────────────────────────────────────────────────
 // SYSTEM PROMPTS
 // ──────────────────────────────────────────────────────────
@@ -123,8 +121,8 @@ function extractVisibleAddresses(history: any[]): string[] {
 }
 
 /** Build a market snapshot string for Gemini context */
-function buildMarketSnapshot(): string {
-  const latestScan = getLatestScan();
+async function buildMarketSnapshot(): Promise<string> {
+  const latestScan = await getLatestScan();
   if (!latestScan || latestScan.properties.length === 0) {
     return "\n\nTODAY'S MARKET: No properties scraped yet today.";
   }
@@ -155,7 +153,8 @@ function buildMarketSnapshot(): string {
 
 /** Search the real live Apify feed instead of relying on broken Vercel filesystem cron data */
 async function searchApifyDB(parameters: any, investmentIntent: string, top: number = 10) {
-  const allProps = await getLiveApifyFeed();
+  const scan = await getLatestScan();
+  const allProps = scan?.properties || [];
   let dataSource = allProps.length > 0 ? "apify" : "empty";
 
   // Apply filters from the parsed parameters
@@ -319,7 +318,7 @@ export async function POST(req: NextRequest) {
     // ── STEP 2A: GENERAL — real estate Q&A, no MLS ──
     if (intent === "general") {
       try {
-        const marketSnapshot = buildMarketSnapshot();
+        const marketSnapshot = await buildMarketSnapshot();
         const conversationPrompt = `CONVERSATION HISTORY:\n${historyText}\n${activePropertyContext}${marketSnapshot}\n\nUSER: ${prompt}`;
         const response = await generateAnalysis(GENERAL_QA_SYSTEM, conversationPrompt);
 
@@ -344,7 +343,7 @@ export async function POST(req: NextRequest) {
     // ── STEP 2B: FOLLOWUP — discuss a visible property, no MLS ──
     if (intent === "followup") {
       try {
-        const marketSnapshot = buildMarketSnapshot();
+        const marketSnapshot = await buildMarketSnapshot();
         const conversationPrompt = `CONVERSATION HISTORY:\n${historyText}\n${activePropertyContext}${marketSnapshot}\n\nUSER: ${prompt}`;
         const response = await generateAnalysis(FOLLOWUP_SYSTEM, conversationPrompt);
 

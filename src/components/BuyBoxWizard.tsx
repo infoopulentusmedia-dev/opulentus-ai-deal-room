@@ -10,9 +10,10 @@ interface BuyBoxWizardProps {
     onClose: () => void;
     initialData: BuyBoxCriteria | null;
     isPersonal?: boolean;
+    onClientSaved?: () => void;
 }
 
-export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal }: BuyBoxWizardProps) {
+export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal, onClientSaved }: BuyBoxWizardProps) {
     const router = useRouter();
     const [step, setStep] = useState(1);
 
@@ -20,6 +21,7 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal 
     const [formData, setFormData] = useState<BuyBoxCriteria>(initialData || {
         id: "",
         name: "",
+        email: "",
         propertyType: "",
         transactionType: "",
         location: "",
@@ -29,6 +31,8 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal 
         sizeMax: "",
         specialCriteria: ""
     });
+
+    const [isSaving, setIsSaving] = useState(false);
 
     if (!isOpen) return null;
 
@@ -40,11 +44,17 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal 
         if (step > 1) setStep(step - 1);
     };
 
-    const handleSubmit = () => {
-        saveClientBuyBox(formData);
-        onClose();
-        // Route to the daily updates page using the custom criteria
-        router.push(`/daily-updates?client=${formData.id}`);
+    const handleSubmit = async () => {
+        setIsSaving(true);
+        try {
+            await saveClientBuyBox(formData);
+            if (onClientSaved) onClientSaved();
+            onClose();
+            // Route to the daily updates page using the custom criteria
+            router.push(`/daily-updates?client=${formData.id}`);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const updateField = (field: keyof BuyBoxCriteria, value: string) => {
@@ -116,6 +126,17 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal 
                                                 Internal ID: <span className="text-[#D4AF37]">{formData.id}</span>
                                             </p>
                                         )}
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-mono text-[#7C7C7C] uppercase block mb-2">Client Email</label>
+                                        <input
+                                            type="email"
+                                            placeholder="e.g. ali@example.com"
+                                            value={formData.email || ""}
+                                            onChange={(e) => updateField("email", e.target.value)}
+                                            className="w-full bg-[#171717] border border-[#242424] rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-[#404040]"
+                                        />
+                                        <p className="text-xs text-[#7C7C7C] mt-2 font-mono">Daily deal blasts will be sent to this address</p>
                                     </div>
                                 </div>
                             )}
@@ -317,9 +338,17 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal 
                             ) : (
                                 <button
                                     onClick={handleSubmit}
-                                    className="px-8 py-2.5 rounded-lg bg-[#D4AF37] text-[#0A0A0A] text-sm font-medium hover:bg-[#F3D673] transition-colors shadow-[0_0_15px_rgba(212,175,55,0.3)]"
+                                    disabled={isSaving}
+                                    className="px-8 py-2.5 rounded-lg bg-[#D4AF37] text-[#0A0A0A] text-sm font-medium hover:bg-[#F3D673] transition-colors shadow-[0_0_15px_rgba(212,175,55,0.3)] disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center min-w-[180px]"
                                 >
-                                    Save Portfolio & Scan
+                                    {isSaving ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-4 h-4 border-2 border-[#0A0A0A] border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Saving...</span>
+                                        </div>
+                                    ) : (
+                                        "Save Portfolio & Scan"
+                                    )}
                                 </button>
                             )}
                         </div>

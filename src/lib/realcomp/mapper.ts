@@ -55,7 +55,7 @@ export function mapRealcompProperty(property: any): ApifyPropertyListing {
     return {
         platform: "mls",
         sourceId: property.ListingId || `RC-${Math.random().toString(36).substring(7)}`,
-        propertyUrl: `https://www.realcomp.com/listing/${property.ListingId}`, // Mock URL as RESO doesn't provide a public consumer URL directly
+        propertyUrl: `https://www.zillow.com/homes/${encodeURIComponent((property.UnparsedAddress || '') + ' ' + (property.PostalCode || '')).trim()}_rb/`,
         address: property.UnparsedAddress || "Unknown Address",
         city: property.City || property.PostalCity || "Unknown City",
         state: property.StateOrProvince || "MI",

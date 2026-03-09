@@ -8,14 +8,7 @@ import { loadSessions, saveSession, createSession, getSessionById, ChatSession }
 import { WATCHLIST_PROPERTIES } from "@/lib/mockData";
 import MogulFactLoader from "@/components/MogulFactLoader";
 
-const CLIENT_BUY_BOXES: Record<string, { name: string; prompt: string }> = {
-    "ali-beydoun": { name: "Ali Beydoun", prompt: "Find strip centers or retail plazas in Wayne County between $1,000,000 and $5,000,000" },
-    "collin-goslin": { name: "Collin Goslin", prompt: "Find strip centers or retail plazas in Wayne County or Oakland County between $1,000,000 and $4,000,000" },
-    "fadi": { name: "Fadi", prompt: "Find warehouse or industrial properties in Wayne County between 40000 and 80000 square feet" },
-    "abe-saad": { name: "Abe Saad", prompt: "Find mechanic shops, collision shops, or car dealerships anywhere in Michigan between $100,000 and $800,000" },
-    "hussein-zeitoun": { name: "Hussein Zeitoun", prompt: "Find residential properties in zip code 48124 between $400,000 and $750,000" },
-    "moe-sabbagh": { name: "Moe Sabbagh", prompt: "Find residential properties in zip codes 48124 and 48128 between $500,000 and $675,000" },
-};
+import { loadClientBuyBox } from "@/lib/buybox";
 
 interface Message {
     role: "user" | "model";
@@ -106,155 +99,247 @@ function ChatContent() {
         if (hasInitialized.current) return;
         hasInitialized.current = true;
 
-        const existingSessionId = searchParams.get("session");
-        const buyboxSlug = searchParams.get("buybox");
-        const freeQuery = searchParams.get("q");
-        const watchtowerId = searchParams.get("watchtowerId");
-        const transfer = searchParams.get("transfer");
+        const init = async () => {
+            const existingSessionId = searchParams.get("session");
+            const buyboxSlug = searchParams.get("buybox");
+            const freeQuery = searchParams.get("q");
+            const watchtowerId = searchParams.get("watchtowerId");
+            const transfer = searchParams.get("transfer");
 
-        if (existingSessionId) {
-            const existing = getSessionById(existingSessionId);
-            if (existing) {
-                setSessionId(existing.id);
-                setSessionHeadline(existing.headline);
-                setMessages(existing.messages);
+            if (existingSessionId) {
+                const existing = await getSessionById(existingSessionId);
+                if (existing) {
+                    setSessionId(existing.id);
+                    setSessionHeadline(existing.headline);
+                    setMessages(existing.messages);
+                    return;
+                }
+            }
+
+            // Handle Email Deep Link — property loaded by sourceId from Supabase
+            const propertyId = searchParams.get("property");
+            if (propertyId) {
+                try {
+                    const res = await fetch(`/api/deal-link?id=${encodeURIComponent(propertyId)}`);
+                    if (res.ok) {
+                        const { property: prop } = await res.json();
+                        if (prop) {
+                            const label = prop.address && prop.address !== "Unknown Address"
+                                ? `${prop.address}, ${prop.city || ""}`
+                                : `${prop.sourceId} (${prop.platform})`;
+
+                            const newSession = createSession(`Email Deal: ${label}`);
+                            setSessionId(newSession.id);
+                            setSessionHeadline(newSession.headline);
+
+                            // Map to Deal Room shape (same as transfer block)
+                            const dealRoomProp = {
+                                listingId: prop.sourceId,
+                                mlsNumber: prop.sourceId,
+                                address: prop.address || "Unknown",
+                                city: prop.city || "",
+                                state: prop.state || "MI",
+                                zip: prop.zipCode || "",
+                                listPrice: prop.price || 0,
+                                pricing: { listPrice: prop.price || 0 },
+                                propertyType: prop.propertyType || "Commercial",
+                                squareFeet: prop.buildingSizeSqft || 0,
+                                sqft: prop.buildingSizeSqft || 0,
+                                dom: prop.daysOnPlatform || 0,
+                                capRate: prop.capRate || null,
+                                remarks: prop.description || "",
+                                propertyUrl: prop.propertyUrl || "",
+                                platform: prop.platform,
+                                lotSizeAcres: prop.lotSizeAcres || null,
+                                yearBuilt: prop.yearBuilt || null,
+                                images: prop.images || [],
+                                features: [],
+                                dealScore: 0,
+                            };
+
+                            setActiveProperty(dealRoomProp);
+                            setActiveTab("Overview");
+
+                            setMessages([{
+                                role: "model",
+                                text: `Loading analysis for **${label}** from your email alert...`,
+                                headline: "Email Deal Loaded",
+                                properties: [dealRoomProp],
+                            }]);
+
+                            const priceStr = prop.price ? `$${prop.price.toLocaleString()}` : "Unpriced";
+                            const sizeStr = prop.buildingSizeSqft ? `${prop.buildingSizeSqft.toLocaleString()} sqft` : "unknown size";
+                            const capStr = prop.capRate ? `${prop.capRate}% cap rate` : "no cap rate listed";
+                            const domStr = prop.daysOnPlatform ? `${prop.daysOnPlatform} days on market` : "unknown DOM";
+
+                            const analysisPrompt = `Analyze this property from the daily email alert in detail: ${prop.address || "Unknown Address"}, ${prop.city || ""} ${prop.state || "MI"} ${prop.zipCode || ""} — ${priceStr}, ${prop.propertyType || "Commercial"}, ${sizeStr}, ${capStr}, ${domStr}. Description: ${(prop.description || "").slice(0, 300)}. Tell me everything: why it could be a good deal, what the risks are, what due diligence I should prioritize, and your overall recommendation.`;
+
+                            setTimeout(() => sendMessage(analysisPrompt), 400);
+
+                            setTimeout(() => {
+                                fetchTabData("Zoning");
+                                fetchTabData("Demographics");
+                                fetchTabData("HBU");
+                            }, 600);
+
+                            if (window.innerWidth < 1024) {
+                                router.push('?deal=open', { scroll: false });
+                            }
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.error("[Chat] Failed to load property from email deep link:", err);
+                }
+            }
+
+            // Handle Live Property Terminal deep link via sessionStorage transfer (100% reliable)
+            if (transfer) {
+                const rawProp = sessionStorage.getItem('deal_room_transfer');
+                if (rawProp) {
+                    try {
+                        const prop = JSON.parse(rawProp);
+                        sessionStorage.removeItem('deal_room_transfer'); // Clean up after use
+
+                        const label = prop.address && prop.address !== "Unknown Address"
+                            ? `${prop.address}, ${prop.city || ""}`
+                            : `${prop.sourceId} (${prop.platform})`;
+
+                        const newSession = createSession(`Deal Analysis: ${label}`);
+                        setSessionId(newSession.id);
+                        setSessionHeadline(newSession.headline);
+
+                        // Map the Apify property shape to the Deal Room's expected shape
+                        const dealRoomProp = {
+                            listingId: prop.sourceId,
+                            mlsNumber: prop.sourceId,
+                            address: prop.address || "Unknown",
+                            city: prop.city || "",
+                            state: prop.state || "MI",
+                            zip: prop.zipCode || "",
+                            listPrice: prop.price || 0,
+                            pricing: { listPrice: prop.price || 0 },
+                            propertyType: prop.propertyType || "Commercial",
+                            squareFeet: prop.buildingSizeSqft || 0,
+                            sqft: prop.buildingSizeSqft || 0,
+                            dom: prop.daysOnPlatform || 0,
+                            capRate: prop.capRate || null,
+                            remarks: prop.description || "",
+                            propertyUrl: prop.propertyUrl || "",
+                            platform: prop.platform,
+                            lotSizeAcres: prop.lotSizeAcres || null,
+                            yearBuilt: prop.yearBuilt || null,
+                            features: [],
+                            dealScore: 0,
+                        };
+
+                        setActiveProperty(dealRoomProp);
+                        setActiveTab("Overview");
+
+                        // Greeting message
+                        setMessages([{
+                            role: "model",
+                            text: `Loading analysis for **${label}**...`,
+                            headline: "Property Loaded",
+                            properties: [dealRoomProp],
+                        }]);
+
+                        // Build a rich analysis prompt with all available data
+                        const priceStr = prop.price ? `$${prop.price.toLocaleString()}` : "Unpriced";
+                        const sizeStr = prop.buildingSizeSqft ? `${prop.buildingSizeSqft.toLocaleString()} sqft` : "unknown size";
+                        const capStr = prop.capRate ? `${prop.capRate}% cap rate` : "no cap rate listed";
+                        const domStr = prop.daysOnPlatform ? `${prop.daysOnPlatform} days on market` : "unknown DOM";
+
+                        const analysisPrompt = `Analyze this property in detail: ${prop.address || "Unknown Address"}, ${prop.city || ""} ${prop.state || "MI"} ${prop.zipCode || ""} — ${priceStr}, ${prop.propertyType || "Commercial"}, ${sizeStr}, ${capStr}, ${domStr}. Tell me everything: why it could be a good deal, what the risks are, what due diligence I should prioritize, and your overall recommendation.`;
+
+                        setTimeout(() => sendMessage(analysisPrompt), 400);
+
+                        // Auto-fetch Opulentus Advantage tabs
+                        setTimeout(() => {
+                            fetchTabData("Zoning");
+                            fetchTabData("Demographics");
+                            fetchTabData("HBU");
+                        }, 600);
+
+                        if (window.innerWidth < 1024) {
+                            router.push('?deal=open', { scroll: false });
+                        }
+                    } catch (err) {
+                        console.error("[Chat] Failed to parse transferred property:", err);
+                    }
+                }
                 return;
             }
-        }
 
-        // Handle Live Property Terminal deep link via sessionStorage transfer (100% reliable)
-        if (transfer) {
-            const rawProp = sessionStorage.getItem('deal_room_transfer');
-            if (rawProp) {
-                try {
-                    const prop = JSON.parse(rawProp);
-                    sessionStorage.removeItem('deal_room_transfer'); // Clean up after use
-
-                    const label = prop.address && prop.address !== "Unknown Address"
-                        ? `${prop.address}, ${prop.city || ""}`
-                        : `${prop.sourceId} (${prop.platform})`;
-
-                    const newSession = createSession(`Deal Analysis: ${label}`);
+            // Handle Watchtower context load
+            if (watchtowerId) {
+                const property = WATCHLIST_PROPERTIES.find(p => p.ListingId === watchtowerId);
+                if (property) {
+                    const newSession = createSession(`Watchtower: ${property.UnparsedAddress}`);
                     setSessionId(newSession.id);
                     setSessionHeadline(newSession.headline);
 
-                    // Map the Apify property shape to the Deal Room's expected shape
-                    const dealRoomProp = {
-                        listingId: prop.sourceId,
-                        mlsNumber: prop.sourceId,
-                        address: prop.address || "Unknown",
-                        city: prop.city || "",
-                        state: prop.state || "MI",
-                        zip: prop.zipCode || "",
-                        listPrice: prop.price || 0,
-                        pricing: { listPrice: prop.price || 0 },
-                        propertyType: prop.propertyType || "Commercial",
-                        squareFeet: prop.buildingSizeSqft || 0,
-                        sqft: prop.buildingSizeSqft || 0,
-                        dom: prop.daysOnPlatform || 0,
-                        capRate: prop.capRate || null,
-                        remarks: prop.description || "",
-                        propertyUrl: prop.propertyUrl || "",
-                        platform: prop.platform,
-                        lotSizeAcres: prop.lotSizeAcres || null,
-                        yearBuilt: prop.yearBuilt || null,
-                        features: [],
-                        dealScore: 0,
-                    };
-
-                    setActiveProperty(dealRoomProp);
+                    // Set the active property to trigger the Deal Room to open
+                    setActiveProperty(property);
                     setActiveTab("Overview");
 
-                    // Greeting message
+                    // Send the contextual AI greeting
                     setMessages([{
                         role: "model",
-                        text: `Loading analysis for **${label}**...`,
-                        headline: "Property Loaded",
-                        properties: [dealRoomProp],
+                        text: `Welcome back. I have loaded ${property.UnparsedAddress} from your Watchtower into the Deal Room. How can we optimize this asset today?`,
+                        headline: "Watchtower Context Loaded",
+                        properties: [property] // Ensure it's in the history for followup context
                     }]);
 
-                    // Build a rich analysis prompt with all available data
-                    const priceStr = prop.price ? `$${prop.price.toLocaleString()}` : "Unpriced";
-                    const sizeStr = prop.buildingSizeSqft ? `${prop.buildingSizeSqft.toLocaleString()} sqft` : "unknown size";
-                    const capStr = prop.capRate ? `${prop.capRate}% cap rate` : "no cap rate listed";
-                    const domStr = prop.daysOnPlatform ? `${prop.daysOnPlatform} days on market` : "unknown DOM";
-
-                    const analysisPrompt = `Analyze this property in detail: ${prop.address || "Unknown Address"}, ${prop.city || ""} ${prop.state || "MI"} ${prop.zipCode || ""} — ${priceStr}, ${prop.propertyType || "Commercial"}, ${sizeStr}, ${capStr}, ${domStr}. Tell me everything: why it could be a good deal, what the risks are, what due diligence I should prioritize, and your overall recommendation.`;
-
-                    setTimeout(() => sendMessage(analysisPrompt), 400);
-
-                    // Auto-fetch Opulentus Advantage tabs
+                    // Auto-fetch the Opulentus Advantage data
                     setTimeout(() => {
                         fetchTabData("Zoning");
                         fetchTabData("Demographics");
                         fetchTabData("HBU");
-                    }, 600);
+                    }, 500);
 
                     if (window.innerWidth < 1024) {
                         router.push('?deal=open', { scroll: false });
                     }
-                } catch (err) {
-                    console.error("[Chat] Failed to parse transferred property:", err);
+                    return;
                 }
             }
-            return;
-        }
 
-        // Handle Watchtower context load
-        if (watchtowerId) {
-            const property = WATCHLIST_PROPERTIES.find(p => p.ListingId === watchtowerId);
-            if (property) {
-                const newSession = createSession(`Watchtower: ${property.UnparsedAddress}`);
-                setSessionId(newSession.id);
-                setSessionHeadline(newSession.headline);
+            let boxName = buyboxSlug || "Unknown Box";
+            let boxPrompt = "";
 
-                // Set the active property to trigger the Deal Room to open
-                setActiveProperty(property);
-                setActiveTab("Overview");
-
-                // Send the contextual AI greeting
-                setMessages([{
-                    role: "model",
-                    text: `Welcome back. I have loaded ${property.UnparsedAddress} from your Watchtower into the Deal Room. How can we optimize this asset today?`,
-                    headline: "Watchtower Context Loaded",
-                    properties: [property] // Ensure it's in the history for followup context
-                }]);
-
-                // Auto-fetch the Opulentus Advantage data
-                setTimeout(() => {
-                    fetchTabData("Zoning");
-                    fetchTabData("Demographics");
-                    fetchTabData("HBU");
-                }, 500);
-
-                if (window.innerWidth < 1024) {
-                    router.push('?deal=open', { scroll: false });
+            if (buyboxSlug) {
+                const boxData = await loadClientBuyBox(buyboxSlug);
+                if (boxData) {
+                    boxName = boxData.name;
+                    boxPrompt = `Find ${boxData.propertyType} properties in ${boxData.location} ${boxData.priceMin || boxData.priceMax ? `between ${boxData.priceMin || 0} and ${boxData.priceMax || 'any'}` : ''}`;
                 }
-                return;
             }
-        }
 
-        // Create a new generic session if not from Watchtower
-        const newSession = createSession(
-            buyboxSlug ? `Buy Box: ${CLIENT_BUY_BOXES[buyboxSlug]?.name || buyboxSlug}` : freeQuery ? freeQuery.slice(0, 40) : "New Chat",
-            buyboxSlug || undefined
-        );
-        setSessionId(newSession.id);
-        setSessionHeadline(newSession.headline);
+            // Create a new generic session if not from Watchtower
+            const newSession = createSession(
+                buyboxSlug ? `Buy Box: ${boxName}` : freeQuery ? freeQuery.slice(0, 40) : "New Chat",
+                buyboxSlug || undefined
+            );
+            setSessionId(newSession.id);
+            setSessionHeadline(newSession.headline);
 
-        // Welcome message
-        setMessages([{
-            role: "model",
-            text: "I'm the Opulentus agent. How can I help you find deals today?",
-            headline: "Agent Ready",
-        }]);
+            // Welcome message
+            setMessages([{
+                role: "model",
+                text: "I'm the Opulentus agent. How can I help you find deals today?",
+                headline: "Agent Ready",
+            }]);
 
-        // Auto-fire if we have a buy box or query
-        if (buyboxSlug && CLIENT_BUY_BOXES[buyboxSlug]) {
-            setTimeout(() => sendMessage(CLIENT_BUY_BOXES[buyboxSlug].prompt), 300);
-        } else if (freeQuery) {
-            setTimeout(() => sendMessage(freeQuery), 300);
-        }
+            // Auto-fire if we have a buy box or query
+            if (buyboxSlug && boxPrompt) {
+                setTimeout(() => sendMessage(boxPrompt), 300);
+            } else if (freeQuery) {
+                setTimeout(() => sendMessage(freeQuery), 300);
+            }
+        };
+
+        init();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

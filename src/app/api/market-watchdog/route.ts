@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { getLiveApifyFeed } from "@/lib/apify/fetcher";
-
+import { getLatestScan } from "@/lib/db";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `You are Opulentus Market Intelligence, an AI that analyzes real estate market data to detect macro-level trends and anomalies.
@@ -26,7 +25,8 @@ Return valid JSON matching this schema:
 
 export async function GET() {
     try {
-        const feed = await getLiveApifyFeed();
+        const scan = await getLatestScan();
+        const feed = scan?.properties || [];
 
         if (feed.length === 0) {
             return NextResponse.json({ alerts: [] });

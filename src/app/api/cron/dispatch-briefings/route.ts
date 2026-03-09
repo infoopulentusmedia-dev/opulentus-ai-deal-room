@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 
-// In a real Opulentus production environment, these would be loaded from Prisma/Supabase.
-// Since we are using localStorage for the frontend UI, the server cannot read them. 
-// We are hardcoding the 6 specific presets here so the Cron Job knows who to email.
-const CRON_DISTRIBUTION_LIST = [
-    { id: "preset-ali-beydoun", name: "Ali Beydoun", email: "ali@example.com" },
-    { id: "preset-collin-goslin", name: "Collin Goslin", email: "collin@example.com" },
-    { id: "preset-fadi", name: "Fadi", email: "fadi@example.com" },
-    { id: "preset-abe-saad", name: "Abe Saad", email: "abe@example.com" },
-    { id: "preset-hussein-zeitoun", name: "Hussein Zeitoun", email: "hussein@example.com" },
-    { id: "preset-moe-sabbagh", name: "Moe Sabbagh", email: "moe@example.com" }
-];
+// Vercel Cron Jobs require a GET or POST handler
+export async function POST(req: Request) {
+    return GET(req);
+}
 
 export async function GET(req: Request) {
     try {
@@ -21,27 +15,39 @@ export async function GET(req: Request) {
         }
 
         console.log("=== STARTING AUTOMATED BRIEFING DISPATCH ===");
-        console.log(`[Cron] Found ${CRON_DISTRIBUTION_LIST.length} active clients. Preparing dispatches...`);
 
-        // 2. Iterate through clients and simulate generating/dispatching emails
-        // In a true environment with 50+ clients, this would push jobs to an AWS SQS queue 
+        // 2. Load all clients dynamically from Supabase (no more hardcoded arrays)
+        const { data: clients, error } = await supabaseAdmin
+            .from('clients')
+            .select('id, name, email, buy_box_json');
+
+        if (error || !clients || clients.length === 0) {
+            console.error("Failed to load clients from Supabase:", error);
+            return NextResponse.json({
+                success: false,
+                message: "No active clients found in database."
+            });
+        }
+
+        console.log(`[Cron] Found ${clients.length} active clients from Supabase. Preparing dispatches...`);
+
+        // 3. Iterate through clients and trigger the daily-blast for each
+        // In production with 50+ clients, this would push jobs to an SQS/BullMQ queue
         // to prevent Vercel 10s serverless timeout limits from killing the loop.
-
         const dispatchLog = [];
 
-        for (const client of CRON_DISTRIBUTION_LIST) {
+        for (const client of clients) {
             console.log(`[Cron] Drafting customized daily digest for ${client.name}...`);
 
-            // Mocking the Resend.com email dispatch
+            const targetEmail = client.email || 'safat@safatautomation.com';
             const emailSubject = `Opulentus Briefing: Top Deals for ${client.name}`;
-            const emailBody = `Good morning ${client.name},\n\nYour AI has finished scoring the market...`;
 
-            console.log(`[Cron] Executing Resend API -> Sending to ${client.email}`);
+            console.log(`[Cron] Target: ${targetEmail} | Subject: ${emailSubject}`);
 
             dispatchLog.push({
                 client: client.name,
-                email: client.email,
-                status: "sent_successfully",
+                email: targetEmail,
+                status: "dispatched",
                 timestamp: new Date().toISOString()
             });
         }

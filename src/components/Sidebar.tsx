@@ -4,85 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import BuyBoxWizard from "./BuyBoxWizard";
-import { loadAllClients, loadPersonalBuyBox, saveClientBuyBox, BuyBoxCriteria, PERSONAL_BUYBOX_ID } from "@/lib/buybox";
-
-const PRESET_CLIENTS: BuyBoxCriteria[] = [
-    {
-        id: "preset-ali-beydoun",
-        name: "🏬 Ali Beydoun",
-        propertyType: "Strip Center / Retail Plaza",
-        transactionType: "Buy",
-        location: "Wayne County",
-        priceMin: "1000000",
-        priceMax: "5000000",
-        sizeMin: "",
-        sizeMax: "",
-        specialCriteria: "",
-        portfolioHoldings: "Currently owns 3 small strip centers in Dearborn ($4M total value). Looking to diversify into slightly larger Wayne County plazas."
-    },
-    {
-        id: "preset-collin-goslin",
-        name: "🏪 Collin Goslin",
-        propertyType: "Strip Center / Retail Plaza",
-        transactionType: "Buy",
-        location: "Wayne or Oakland County",
-        priceMin: "1000000",
-        priceMax: "4000000",
-        sizeMin: "",
-        sizeMax: "",
-        specialCriteria: "",
-        portfolioHoldings: "Owns 1 large retail plaza in Southfield ($3M value). Wants to stay strictly within Wayne/Oakland borders."
-    },
-    {
-        id: "preset-fadi",
-        name: "🏭 Fadi",
-        propertyType: "Warehouse / Industrial",
-        transactionType: "Buy",
-        location: "Wayne County",
-        priceMin: "",
-        priceMax: "",
-        sizeMin: "40000",
-        sizeMax: "80000",
-        specialCriteria: "No max size constraint.",
-        portfolioHoldings: "Heavy industrial focus. Owns 2 large logistics hubs near DTW airport. Needs 40k+ sqft to expand current operations."
-    },
-    {
-        id: "preset-abe-saad",
-        name: "🔧 Abe Saad",
-        propertyType: "Mechanic / Collision / Dealership",
-        transactionType: "Buy",
-        location: "Anywhere in Michigan",
-        priceMin: "100000",
-        priceMax: "800000",
-        sizeMin: "",
-        sizeMax: "",
-        specialCriteria: ""
-    },
-    {
-        id: "preset-hussein-zeitoun",
-        name: "🏠 Hussein Zeitoun",
-        propertyType: "Residential",
-        transactionType: "Buy",
-        location: "48124 Zip Code",
-        priceMin: "400000",
-        priceMax: "750000",
-        sizeMin: "",
-        sizeMax: "",
-        specialCriteria: ""
-    },
-    {
-        id: "preset-moe-sabbagh",
-        name: "🏡 Moe Sabbagh",
-        propertyType: "Residential",
-        transactionType: "Buy",
-        location: "48124 & 48128 Zips",
-        priceMin: "500000",
-        priceMax: "675000",
-        sizeMin: "",
-        sizeMax: "",
-        specialCriteria: ""
-    }
-];
+import { loadPersonalBuyBox, BuyBoxCriteria, PERSONAL_BUYBOX_ID } from "@/lib/buybox";
 
 export default function Sidebar() {
     const pathname = usePathname();
@@ -90,21 +12,30 @@ export default function Sidebar() {
     const [mounted, setMounted] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
     const [editingPersonal, setEditingPersonal] = useState(false);
-    const [clients, setClients] = useState<BuyBoxCriteria[]>([]);
+    const [clients, setClients] = useState<any[]>([]);
     const [personalBuyBox, setPersonalBuyBox] = useState<BuyBoxCriteria | null>(null);
 
-    // Load clients on mount and when wizard closes
+    const fetchClients = () => {
+        fetch('/api/clients')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) setClients(data);
+            })
+            .catch(console.error);
+    };
+
+    // Load clients from Supabase on mount
     useEffect(() => {
         setMounted(true);
-        setClients(loadAllClients());
-        setPersonalBuyBox(loadPersonalBuyBox());
+        fetchClients();
+
+        loadPersonalBuyBox().then(setPersonalBuyBox);
     }, [wizardOpen]);
 
     // Hide sidebar on public shared links
     if (pathname.startsWith('/shared')) {
         return null;
     }
-
 
     return (
         <>
@@ -182,8 +113,8 @@ export default function Sidebar() {
                     <div className="my-4 border-t border-[#242424] mx-2"></div>
 
                     {/* Client Portfolios Section */}
-                    <div className="px-2 mb-2 flex items-center h-5">
-                        <span className="text-[10px] font-mono tracking-wider text-[#7C7C7C] uppercase opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Client Portfolios</span>
+                    <div className="px-2 mb-2 flex items-center justify-between h-5 group/clients relative">
+                        <span className="text-[10px] font-mono tracking-wider text-[#7C7C7C] uppercase opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Live Clients</span>
                     </div>
 
                     {clients.map(client => (
@@ -193,9 +124,12 @@ export default function Sidebar() {
                             className={`w-full flex items-center px-2 py-3 rounded-lg transition-colors text-left ${pathname === '/daily-updates' && (mounted && window.location.search.includes(`client=${client.id}`)) ? 'bg-[#171717] text-[#D4AF37]' : 'text-[#A3A3A3] hover:bg-[#171717] hover:text-white'}`}
                         >
                             <div className="w-8 flex items-center justify-center shrink-0">
-                                <svg className="w-5 h-5 text-[#A3A3A3]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                <span className="text-xl">{client.name.match(/[\uD83C-\uDBFF]|[\uDC00-\uDFFF]/) ? '' : '🏢'}</span>
+                                {client.name.match(/[\uD83C-\uDBFF]|[\uDC00-\uDFFF]/) ? client.name.split(' ')[0] : ''}
                             </div>
-                            <span className="ml-4 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{client.name}</span>
+                            <span className="ml-4 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                {client.name.match(/[\uD83C-\uDBFF]|[\uDC00-\uDFFF]/) ? client.name.split(' ').slice(1).join(' ') : client.name}
+                            </span>
                         </button>
                     ))}
 
@@ -213,37 +147,13 @@ export default function Sidebar() {
                         <span className="ml-4 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Add Client</span>
                     </button>
 
-                    {/* Quick Presets */}
-                    <div className="px-2 mt-4 mb-2 flex items-center h-5">
-                        <span className="text-[10px] font-mono tracking-wider text-[#7C7C7C] uppercase opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">1-Click Presets</span>
-                    </div>
-
-                    {PRESET_CLIENTS.filter(preset => !clients.some(c => c.id === preset.id)).map(preset => (
-                        <button
-                            key={preset.id}
-                            onClick={() => {
-                                saveClientBuyBox(preset);
-                                setClients(loadAllClients());
-                                router.push(`/daily-updates?client=${preset.id}`);
-                            }}
-                            className="flex items-center px-2 py-2 rounded-lg transition-colors text-[#7C7C7C] hover:bg-[#171717] hover:text-[#D4AF37] w-full text-left"
-                        >
-                            <div className="w-8 flex items-center justify-center shrink-0 text-lg">
-                                {preset.name.split(' ')[0]} {/* Extract emoji */}
-                            </div>
-                            <span className="ml-4 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{preset.name.split(' ').slice(1).join(' ')}</span>
-                        </button>
-                    ))}
-
                 </nav>
-
             </aside>
 
             {/* Hidden spacer to push main content right since sidebar is fixed */}
             <div className="w-[80px] shrink-0 hidden md:block" />
 
             {/* Render Wizard outside of standard DOM flow */}
-            {/* Dynamic wizard for both clients and agent */}
             <BuyBoxWizard
                 isOpen={wizardOpen}
                 onClose={() => {
@@ -252,6 +162,7 @@ export default function Sidebar() {
                 }}
                 initialData={editingPersonal ? (personalBuyBox || { id: PERSONAL_BUYBOX_ID, name: "", propertyType: "", transactionType: "", location: "", priceMin: "", priceMax: "", sizeMin: "", sizeMax: "", specialCriteria: "" }) : null}
                 isPersonal={editingPersonal}
+                onClientSaved={fetchClients}
             />
         </>
     );

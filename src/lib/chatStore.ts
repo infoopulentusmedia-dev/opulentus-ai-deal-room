@@ -14,26 +14,38 @@ function generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-export function loadSessions(): ChatSession[] {
-    if (typeof window === "undefined") return [];
+export async function loadSessions(clientId?: string): Promise<ChatSession[]> {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const sessions: ChatSession[] = JSON.parse(raw);
-        return sessions.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_SESSIONS);
+        const url = clientId ? `/api/chat-sessions?clientId=${clientId}` : `/api/chat-sessions`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        if (!Array.isArray(data)) return [];
+
+        return data.map((row: any) => ({
+            ...row.chat_json,
+            updatedAt: new Date(row.updated_at).getTime()
+        } as ChatSession));
     } catch {
         return [];
     }
 }
 
-export function saveSession(session: ChatSession): void {
-    if (typeof window === "undefined") return;
+export async function saveSession(session: ChatSession, clientId?: string): Promise<void> {
     try {
-        const sessions = loadSessions().filter(s => s.id !== session.id);
-        sessions.unshift({ ...session, updatedAt: Date.now() });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.slice(0, MAX_SESSIONS)));
-    } catch {
-        // localStorage might be full
+        const payload = {
+            session: { ...session, updatedAt: Date.now() },
+            clientId: clientId || session.buyboxSlug || 'global'
+        };
+
+        await fetch('/api/chat-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch (e) {
+        console.error("Failed to sync chat session to Supabase:", e);
     }
 }
 
@@ -48,7 +60,11 @@ export function createSession(headline?: string, buyboxSlug?: string): ChatSessi
     };
 }
 
-export function getSessionById(id: string): ChatSession | null {
-    const sessions = loadSessions();
-    return sessions.find(s => s.id === id) || null;
+export async function getSessionById(id: string): Promise<ChatSession | null> {
+    try {
+        const sessions = await loadSessions();
+        return sessions.find(s => s.id === id) || null;
+    } catch {
+        return null;
+    }
 }

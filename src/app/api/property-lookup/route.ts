@@ -10,7 +10,8 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Missing sourceId parameter" }, { status: 400 });
         }
 
-        const latestScan = getLatestScan();
+        // Await the asynchronous database call
+        const latestScan = await getLatestScan();
         if (!latestScan || latestScan.properties.length === 0) {
             return NextResponse.json({ error: "No scan data available" }, { status: 404 });
         }

@@ -1,0 +1,77 @@
+[
+    {
+        "id": "preset-ali-beydoun",
+        "name": "🏬 Ali Beydoun",
+        "propertyType": "Strip Center / Retail Plaza",
+        "transactionType": "Buy",
+        "location": "Wayne County",
+        "priceMin": "1000000",
+        "priceMax": "5000000",
+        "sizeMin": "",
+        "sizeMax": "",
+        "specialCriteria": "",
+        "portfolioHoldings": "Currently owns 3 small strip centers in Dearborn ($4M total value). Looking to diversify into slightly larger Wayne County plazas."
+    },
+    {
+        "id": "preset-collin-goslin",
+        "name": "🏪 Collin Goslin",
+        "propertyType": "Strip Center / Retail Plaza",
+        "transactionType": "Buy",
+        "location": "Wayne or Oakland County",
+        "priceMin": "1000000",
+        "priceMax": "4000000",
+        "sizeMin": "",
+        "sizeMax": "",
+        "specialCriteria": "",
+        "portfolioHoldings": "Owns 1 large retail plaza in Southfield ($3M value). Wants to stay strictly within Wayne/Oakland borders."
+    },
+    {
+        "id": "preset-fadi",
+        "name": "🏭 Fadi",
+        "propertyType": "Warehouse / Industrial",
+        "transactionType": "Buy",
+        "location": "Wayne County",
+        "priceMin": "",
+        "priceMax": "",
+        "sizeMin": "40000",
+        "sizeMax": "80000",
+        "specialCriteria": "No max size constraint.",
+        "portfolioHoldings": "Heavy industrial focus. Owns 2 large logistics hubs near DTW airport. Needs 40k+ sqft to expand current operations."
+    },
+    {
+        "id": "preset-abe-saad",
+        "name": "🔧 Abe Saad",
+        "propertyType": "Mechanic / Collision / Dealership",
+        "transactionType": "Buy",
+        "location": "Anywhere in Michigan",
+        "priceMin": "100000",
+        "priceMax": "800000",
+        "sizeMin": "",
+        "sizeMax": "",
+        "specialCriteria": ""
+    },
+    {
+        "id": "preset-hussein-zeitoun",
+        "name": "🏠 Hussein Zeitoun",
+        "propertyType": "Residential",
+        "transactionType": "Buy",
+        "location": "48124 Zip Code",
+        "priceMin": "400000",
+        "priceMax": "750000",
+        "sizeMin": "",
+        "sizeMax": "",
+        "specialCriteria": ""
+    },
+    {
+        "id": "preset-moe-sabbagh",
+        "name": "🏡 Moe Sabbagh",
+        "propertyType": "Residential",
+        "transactionType": "Buy",
+        "location": "48124 & 48128 Zips",
+        "priceMin": "500000",
+        "priceMax": "675000",
+        "sizeMin": "",
+        "sizeMax": "",
+        "specialCriteria": ""
+    }
+]

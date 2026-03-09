@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateAnalysis } from "@/lib/gemini/client";
 import { getLatestScan, getDigestCache, saveDigestCache } from "@/lib/db";
-import { getLiveApifyFeed } from "@/lib/apify/fetcher";
+import { supabaseAdmin } from "@/lib/supabase";
 import { checkTaxIncentives } from "@/app/api/tax-incentive-check/route";
 
 const DAILY_DIGEST_SYSTEM = `You are an elite Commercial Real Estate Acquisitions Director for Opulentus Private Wealth.
@@ -47,15 +47,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing buybox criteria." }, { status: 400 });
         }
 
-        // Extremely fast live fetch from Apify Database instead of ephemeral Vercel local filesystem
-        const combinedFeed = await getLiveApifyFeed();
+        // Fetch all live properties from Supabase Postgres Database instead of the Vercel filesystem
+        const { data: properties, error: dbErr } = await supabaseAdmin.from('properties')
+            .select('*')
+            .order('scraped_at', { ascending: false })
+            .limit(200);
 
-        if (combinedFeed.length === 0) {
+        if (dbErr || !properties || properties.length === 0) {
             return NextResponse.json({
-                briefing: "Your data sources (Apify scrapers and RealComp API) have not pulled any new properties yet today. Trigger a new run or broaden your search criteria to generate the digest.",
+                briefing: "Your Supabase Database does not have any scraped properties yet. Trigger the daily scraper to populate the database.",
                 properties: []
             });
         }
+
+        const combinedFeed = properties.map(p => p.property_data_json);
 
         // --- CACHE CHECK ---
         const todayStr = new Date().toISOString().split('T')[0];

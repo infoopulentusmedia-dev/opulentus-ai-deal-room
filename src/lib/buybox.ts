@@ -1,8 +1,10 @@
 export const PERSONAL_BUYBOX_ID = "my-personal-buybox";
+export const GLOBAL_BUYBOX_ID = "global";
 
 export interface BuyBoxCriteria {
     id: string; // unique slug like "ali-beydoun"
     name: string; // readable name like "Ali Beydoun"
+    email?: string; // client email for daily blast delivery
     propertyType: string;
     transactionType: string;
     location: string;
@@ -27,97 +29,96 @@ export const defaultBuyBox: BuyBoxCriteria = {
     specialCriteria: ""
 };
 
-export function saveClientBuyBox(criteria: BuyBoxCriteria) {
-    if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("opulentus_clients");
-        const clients: Record<string, BuyBoxCriteria> = stored ? JSON.parse(stored) : {};
-        clients[criteria.id] = criteria;
-        localStorage.setItem("opulentus_clients", JSON.stringify(clients));
+export async function saveClientBuyBox(criteria: BuyBoxCriteria): Promise<void> {
+    try {
+        // Extract email so it goes into the dedicated column, not inside buy_box_json
+        const { email, ...buyBoxFields } = criteria;
+        const payload: any = { ...buyBoxFields };
+        if (email !== undefined) {
+            payload.email = email;
+        }
+        await fetch('/api/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch (e) {
+        console.error("Failed to sync client to Supabase:", e);
     }
 }
 
-export function loadClientBuyBox(id: string): BuyBoxCriteria | null {
-    if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("opulentus_clients");
-        if (stored) {
-            try {
-                const clients: Record<string, BuyBoxCriteria> = JSON.parse(stored);
-                return clients[id] || null;
-            } catch (e) {
-                console.error("Failed to parse stored clients", e);
-            }
+export async function loadClientBuyBox(id: string): Promise<BuyBoxCriteria | null> {
+    try {
+        const res = await fetch('/api/clients');
+        if (!res.ok) return null;
+        const clients = await res.json();
+        const client = clients.find((c: any) => c.id === id);
+        if (client && client.buy_box_json) {
+            return {
+                id: client.id,
+                name: client.name,
+                ...client.buy_box_json
+            } as BuyBoxCriteria;
         }
+    } catch (e) {
+        console.error("Failed to load client from Supabase:", e);
     }
     return null;
 }
 
-export function loadAllClients(): BuyBoxCriteria[] {
-    if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("opulentus_clients");
-        if (stored) {
-            try {
-                const clients: Record<string, BuyBoxCriteria> = JSON.parse(stored);
-                if (Object.keys(clients).length > 0) {
-                    return Object.values(clients);
-                }
-            } catch (e) {
-                console.error("Failed to parse stored clients", e);
-            }
+export async function loadAllClients(): Promise<BuyBoxCriteria[]> {
+    try {
+        const res = await fetch('/api/clients');
+        if (!res.ok) return getDefaultClientFallback();
+        const clients = await res.json();
+
+        if (!clients || clients.length === 0) {
+            return getDefaultClientFallback();
         }
 
-        // If no clients exist (e.g. first time loading Vercel), return a single default Ali Beydoun profile
-        // CRITICAL: We DO NOT call localStorage.setItem here because this function runs during initial React Hydration.
-        // Calling a side-effect here will throw a fatal "Text content did not match server-rendered HTML" exception on Vercel.
-        const defaultClient: BuyBoxCriteria = {
-            id: "ali-beydoun",
-            name: "Ali Beydoun",
-            propertyType: "Strip Center / Retail Plaza",
-            transactionType: "Buy",
-            location: "Wayne County",
-            priceMin: "",
-            priceMax: "5000000",
-            sizeMin: "",
-            sizeMax: "",
-            specialCriteria: "Value-add opportunities, power centers, or distressed plazas.",
-            portfolioHoldings: ""
-        };
-
-        return [defaultClient];
-    }
-    return [];
-}
-
-export function loadPersonalBuyBox(): BuyBoxCriteria | null {
-    if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("opulentus_clients");
-        if (stored) {
-            try {
-                const clients: Record<string, BuyBoxCriteria> = JSON.parse(stored);
-                return clients[PERSONAL_BUYBOX_ID] || null;
-            } catch (e) {
-                console.error("Failed to load personal buy box", e);
-            }
-        }
-    }
-    return null;
-}
-
-export function saveBuyBox(criteria: BuyBoxCriteria) {
-    if (typeof window !== "undefined") {
-        localStorage.setItem("opulentus_buybox", JSON.stringify(criteria));
+        return clients.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            email: c.email || '',
+            ...c.buy_box_json
+        } as BuyBoxCriteria));
+    } catch (e) {
+        console.error("Failed to parse stored clients", e);
+        return getDefaultClientFallback();
     }
 }
 
-export function loadBuyBox(): BuyBoxCriteria | null {
-    if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("opulentus_buybox");
-        if (stored) {
-            try {
-                return JSON.parse(stored);
-            } catch (e) {
-                console.error("Failed to parse stored buybox", e);
-            }
-        }
+function getDefaultClientFallback(): BuyBoxCriteria[] {
+    const defaultClient: BuyBoxCriteria = {
+        id: "ali-beydoun",
+        name: "Ali Beydoun",
+        propertyType: "Strip Center / Retail Plaza",
+        transactionType: "Buy",
+        location: "Wayne County",
+        priceMin: "",
+        priceMax: "5000000",
+        sizeMin: "",
+        sizeMax: "",
+        specialCriteria: "Value-add opportunities, power centers, or distressed plazas.",
+        portfolioHoldings: ""
+    };
+    return [defaultClient];
+}
+
+export async function loadPersonalBuyBox(): Promise<BuyBoxCriteria | null> {
+    return loadClientBuyBox(PERSONAL_BUYBOX_ID);
+}
+
+export async function saveBuyBox(criteria: BuyBoxCriteria): Promise<void> {
+    const globalCriteria = { ...criteria, id: GLOBAL_BUYBOX_ID, name: "Global Feed" };
+    return saveClientBuyBox(globalCriteria);
+}
+
+export async function loadBuyBox(): Promise<BuyBoxCriteria | null> {
+    const box = await loadClientBuyBox(GLOBAL_BUYBOX_ID);
+    if (!box) {
+        // Provide a default empty one for the global feed
+        return { ...defaultBuyBox, id: GLOBAL_BUYBOX_ID, name: "Global Feed", location: "Global", propertyType: "All" };
     }
-    return null;
+    return box;
 }

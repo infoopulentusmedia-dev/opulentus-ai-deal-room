@@ -46,40 +46,46 @@ function DailyUpdatesContent() {
     const [showWatchdog, setShowWatchdog] = useState(false);
 
     useEffect(() => {
-        let box: BuyBoxCriteria | null = null;
-        if (clientId) {
-            box = loadClientBuyBox(clientId);
-            if (box) setClientName(box.name);
-        } else {
-            box = loadBuyBox();
-            setClientName("Global Feed");
-        }
+        let isMounted = true;
 
-        setBuybox(box);
-
-        if (!box) {
-            setIsLoading(false);
-            return;
-        }
-
-        async function fetchDigest() {
+        async function initFeed() {
             setIsLoading(true);
             try {
+                let box: BuyBoxCriteria | null = null;
+                if (clientId) {
+                    box = await loadClientBuyBox(clientId);
+                    if (box && isMounted) setClientName(box.name);
+                } else {
+                    box = await loadBuyBox();
+                    if (isMounted) setClientName("Global Feed");
+                }
+
+                if (isMounted) setBuybox(box);
+
+                if (!box) {
+                    if (isMounted) setIsLoading(false);
+                    return;
+                }
+
+                // Fetch Digest with the loaded Box
                 const res = await fetch("/api/generate-daily-digest", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ buybox: box }),
                 });
                 const data = await res.json();
-                setDigest(data);
+                if (isMounted) setDigest(data);
+
             } catch (err) {
                 console.error("Failed to load digest:", err);
             } finally {
-                setIsLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         }
 
-        fetchDigest();
+        initFeed();
+
+        return () => { isMounted = false; };
     }, [clientId]);
 
     // Step 15: Fetch Market Watchdog Alerts

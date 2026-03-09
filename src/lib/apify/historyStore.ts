@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import { ApifyPropertyListing } from './mockFeed';
+import { supabaseAdmin } from '../supabase';
 
 interface PricePoint {
     date: string; // ISO string
@@ -16,88 +15,71 @@ export interface HistoricalProperty {
     originalPrice: number | null;
     currentPrice: number | null;
     priceHistory: PricePoint[];
-    // We store the full latest listing so we don't have to keep fetching it
     latestData: ApifyPropertyListing;
 }
 
-const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === "production";
-const HISTORY_FILE_PATH = IS_VERCEL
-    ? '/tmp/property_history.json'
-    : path.join(process.cwd(), 'data', 'property_history.json');
-
-// Ensure the data directory exists
-function ensureDataDir() {
-    const dataDir = path.dirname(HISTORY_FILE_PATH);
-    if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-    }
-}
-
-// Load the current database
-export function loadHistoryDB(): Record<string, HistoricalProperty> {
-    ensureDataDir();
-    if (!fs.existsSync(HISTORY_FILE_PATH)) {
-        return {};
-    }
+// Load the current database from Supabase
+export async function loadHistoryDB(): Promise<Record<string, HistoricalProperty>> {
     try {
-        const raw = fs.readFileSync(HISTORY_FILE_PATH, 'utf-8');
-        return JSON.parse(raw);
+        const { data, error } = await supabaseAdmin.from('properties').select('id, property_data_json');
+        if (error || !data) return {};
+
+        const db: Record<string, HistoricalProperty> = {};
+        for (const row of data) {
+            if (row.property_data_json && row.property_data_json._history) {
+                db[row.id] = row.property_data_json._history;
+            }
+        }
+        return db;
     } catch (e) {
-        console.error("Failed to load property history DB:", e);
+        console.error("Failed to load property history from Supabase:", e);
         return {};
     }
 }
 
-// Save the database back to disk
-function saveHistoryDB(db: Record<string, HistoricalProperty>) {
-    ensureDataDir();
-    try {
-        fs.writeFileSync(HISTORY_FILE_PATH, JSON.stringify(db, null, 2));
-    } catch (e) {
-        console.error("Failed to save property history DB:", e);
-    }
-}
-
-// Record a new snapshot of listings
-export function recordSnapshot(listings: ApifyPropertyListing[]) {
-    const db = loadHistoryDB();
+// Record a new snapshot of listings and merge price history into Supabase
+export async function recordSnapshot(listings: ApifyPropertyListing[]) {
+    const db = await loadHistoryDB();
     const today = new Date().toISOString();
 
     let updatedCount = 0;
     let newCount = 0;
 
+    const upsertBatch = [];
+
     for (const listing of listings) {
         const id = listing.sourceId;
-        const currentPrice = listing.price;
+        const currentPrice = listing.price || null;
+
+        let history: HistoricalProperty;
 
         if (db[id]) {
             // Property already exists in history
-            const existing = db[id];
-            existing.lastSeen = today;
-            existing.latestData = listing; // update with freshest data
+            history = db[id];
+            history.lastSeen = today;
+            history.latestData = listing;
 
-            // Did the price change? Check the last recorded price point
             if (currentPrice !== null) {
-                const lastPricePoint = existing.priceHistory[existing.priceHistory.length - 1];
+                const lastPricePoint = history.priceHistory[history.priceHistory.length - 1];
                 if (!lastPricePoint || lastPricePoint.price !== currentPrice) {
-                    existing.priceHistory.push({ date: today, price: currentPrice });
-                    existing.currentPrice = currentPrice;
+                    history.priceHistory.push({ date: today, price: currentPrice });
+                    history.currentPrice = currentPrice;
                 }
             }
             updatedCount++;
         } else {
-            // New property we've never seen before
+            // New property
             const priceHistory: PricePoint[] = [];
             if (currentPrice !== null) {
                 priceHistory.push({ date: today, price: currentPrice });
             }
 
-            db[id] = {
+            history = {
                 sourceId: listing.sourceId,
-                platform: listing.platform,
+                platform: listing.platform as any,
                 firstSeen: today,
                 lastSeen: today,
-                address: listing.address,
+                address: listing.address || "Unknown",
                 originalPrice: currentPrice,
                 currentPrice: currentPrice,
                 priceHistory: priceHistory,
@@ -105,15 +87,32 @@ export function recordSnapshot(listings: ApifyPropertyListing[]) {
             };
             newCount++;
         }
+
+        // Prepare for UPSERT
+        const enrichedListing = { ...listing, _history: history };
+        upsertBatch.push({
+            id: id,
+            platform: listing.platform,
+            address: listing.address,
+            price: currentPrice,
+            property_type: listing.propertyType,
+            property_data_json: enrichedListing
+        });
     }
 
-    saveHistoryDB(db);
-    console.log(`[History Store] Snapshot recorded. New: ${newCount}, Updated: ${updatedCount}. Total in DB: ${Object.keys(db).length}.`);
+    if (upsertBatch.length > 0) {
+        const { error } = await supabaseAdmin.from('properties').upsert(upsertBatch, { onConflict: 'id' });
+        if (error) {
+            console.error("[History Store] Failed to push history snapshot to Supabase:", error);
+        } else {
+            console.log(`[History Store] Snapshot synced. New: ${newCount}, Updated: ${updatedCount}.`);
+        }
+    }
 }
 
 // Helper: Get properties that have dropped in price
-export function getPriceDrops(): HistoricalProperty[] {
-    const db = loadHistoryDB();
+export async function getPriceDrops(): Promise<HistoricalProperty[]> {
+    const db = await loadHistoryDB();
     const drops: HistoricalProperty[] = [];
 
     for (const id in db) {

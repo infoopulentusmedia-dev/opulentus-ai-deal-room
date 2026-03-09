@@ -25,18 +25,21 @@ export default function MorningBriefPage() {
 
     // Load all saved clients on mount
     useEffect(() => {
-        const allClients = loadAllClients();
-        setClients(allClients);
+        const init = async () => {
+            const allClients = await loadAllClients();
+            setClients(allClients);
 
-        // Auto-expand first client, start all fetches
-        if (allClients.length > 0) {
-            setExpanded({ [allClients[0].id!]: true });
-        }
+            // Auto-expand first client, start all fetches
+            if (allClients.length > 0) {
+                setExpanded({ [allClients[0].id!]: true });
+            }
 
-        // Fire parallel Gemini calls for each client
-        allClients.forEach(client => {
-            fetchClientBrief(client);
-        });
+            // Fire parallel Gemini calls for each client
+            allClients.forEach(client => {
+                fetchClientBrief(client);
+            });
+        };
+        init();
     }, []);
 
     // Update summary totals when results change

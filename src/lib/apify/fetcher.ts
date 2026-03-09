@@ -10,10 +10,23 @@ const LOOPNET_TASK_ID = "RPSAB9EzBLJsxEeKm";
 async function fetchLatestDataset(taskId: string): Promise<any[]> {
     try {
         const url = `https://api.apify.com/v2/actor-tasks/${taskId}/runs/last/dataset/items?format=json&clean=true&limit=200`;
-        const res = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
-            cache: 'no-store' // Avoid Vercel's 2MB Edge Cache limit crash
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        let res;
+        try {
+            res = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
+                cache: 'no-store', // Avoid Vercel's 2MB Edge Cache limit crash
+                signal: controller.signal
+            });
+        } catch (e: any) {
+            if (e.name === 'AbortError') throw new Error('Apify API request timed out');
+            throw e;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
         if (!res.ok) {
             console.warn(`Apify fetch for ${taskId} failed with status ${res.status}. (Run might not exist yet).`);
             return [];
@@ -120,7 +133,7 @@ export async function getCrexiFeed(): Promise<ApifyPropertyListing[]> {
         });
     }
 
-    if (listings.length > 0) recordSnapshot(listings);
+    if (listings.length > 0) await recordSnapshot(listings);
 
     // Deduplicate by sourceId to prevent React key collisions from Apify pagination overlaps
     const uniqueListingsMap = new Map<string, ApifyPropertyListing>();
@@ -131,7 +144,7 @@ export async function getCrexiFeed(): Promise<ApifyPropertyListing[]> {
     }
     const uniqueListings = Array.from(uniqueListingsMap.values());
 
-    const db = loadHistoryDB();
+    const db = await loadHistoryDB();
     return uniqueListings.map(listing => {
         const history = db[listing.sourceId];
         if (history) {
@@ -170,7 +183,7 @@ export async function getLoopNetFeed(): Promise<ApifyPropertyListing[]> {
         });
     }
 
-    if (listings.length > 0) recordSnapshot(listings);
+    if (listings.length > 0) await recordSnapshot(listings);
 
     // Deduplicate by sourceId to prevent React key collisions from Apify pagination overlaps
     const uniqueListingsMap = new Map<string, ApifyPropertyListing>();
@@ -181,7 +194,7 @@ export async function getLoopNetFeed(): Promise<ApifyPropertyListing[]> {
     }
     const uniqueListings = Array.from(uniqueListingsMap.values());
 
-    const db = loadHistoryDB();
+    const db = await loadHistoryDB();
     return uniqueListings.map(listing => {
         const history = db[listing.sourceId];
         if (history) {
@@ -290,11 +303,11 @@ export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "a
 
     // 1. Record the fresh snapshot into our local JSON database
     if (listings.length > 0) {
-        recordSnapshot(listings);
+        await recordSnapshot(listings);
     }
 
     // 2. Hydrate the list with historical context (e.g., price drop info)
-    const db = loadHistoryDB();
+    const db = await loadHistoryDB();
     const enrichedListings = listings.map(listing => {
         const history = db[listing.sourceId];
         if (history) {

@@ -5,73 +5,47 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loadSessions, ChatSession } from "@/lib/chatStore";
 import WatchtowerDrawer from "@/components/WatchtowerDrawer";
+import { loadAllClients, BuyBoxCriteria } from "@/lib/buybox";
 
-const CLIENT_BUY_BOXES = [
-  {
-    slug: "ali-beydoun",
-    name: "Ali Beydoun",
-    type: "Strip Center / Retail Plaza",
-    location: "Wayne County",
-    price: "$1M – $5M",
-    icon: "🏬",
-    prompt: "Find strip centers or retail plazas in Wayne County between $1,000,000 and $5,000,000"
-  },
-  {
-    slug: "collin-goslin",
-    name: "Collin Goslin",
-    type: "Strip Center / Retail Plaza",
-    location: "Wayne or Oakland County",
-    price: "$1M – $4M",
-    icon: "🏪",
-    prompt: "Find strip centers or retail plazas in Wayne County or Oakland County between $1,000,000 and $4,000,000"
-  },
-  {
-    slug: "fadi",
-    name: "Fadi",
-    type: "Warehouse / Industrial",
-    location: "Wayne County",
-    price: "40k–80k sqft • No max",
-    icon: "🏭",
-    prompt: "Find warehouse or industrial properties in Wayne County between 40000 and 80000 square feet"
-  },
-  {
-    slug: "abe-saad",
-    name: "Abe Saad",
-    type: "Mechanic / Collision / Dealership",
-    location: "Anywhere in Michigan",
-    price: "$100k – $800k",
-    icon: "🔧",
-    prompt: "Find mechanic shops, collision shops, or car dealerships anywhere in Michigan between $100,000 and $800,000"
-  },
-  {
-    slug: "hussein-zeitoun",
-    name: "Hussein Zeitoun",
-    type: "Residential",
-    location: "48124 Zip Code",
-    price: "$400k – $750k",
-    icon: "🏠",
-    prompt: "Find residential properties in zip code 48124 between $400,000 and $750,000"
-  },
-  {
-    slug: "moe-sabbagh",
-    name: "Moe Sabbagh",
-    type: "Residential",
-    location: "48124 & 48128 Zips",
-    price: "$500k – $675k",
-    icon: "🏡",
-    prompt: "Find residential properties in zip codes 48124 and 48128 between $500,000 and $675,000"
-  }
-];
+
 
 export default function Home() {
   const router = useRouter();
   const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
+  const [clientBuyBoxes, setClientBuyBoxes] = useState<any[]>([]);
   const [isWatchtowerOpen, setIsWatchtowerOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
 
   useEffect(() => {
-    // Only fetch from localStorage after component mounts on client to avoid hydration mismatch
-    setRecentSessions(loadSessions());
+    const init = async () => {
+      setRecentSessions(await loadSessions());
+
+      const allClients = await loadAllClients();
+      const formattedClients = allClients.map((box: BuyBoxCriteria) => {
+        let icon = "🏢";
+        const typeStr = (box.propertyType || "Commercial").toLowerCase();
+        if (typeStr.includes("residential")) icon = "🏡";
+        else if (typeStr.includes("industrial") || typeStr.includes("warehouse")) icon = "🏭";
+        else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
+        else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
+
+        const min = box.priceMin ? `$${(parseInt(box.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
+        const max = box.priceMax ? `$${(parseInt(box.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
+        let priceStr = `${min} – ${max}`;
+        if (!box.priceMin && !box.priceMax) priceStr = "Any Price";
+
+        return {
+          slug: box.id,
+          name: box.name,
+          type: box.propertyType || "Commercial",
+          location: box.location || "Any Location",
+          price: priceStr,
+          icon: icon,
+        };
+      });
+      setClientBuyBoxes(formattedClients);
+    };
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -99,6 +73,10 @@ export default function Home() {
     if (diffHrs < 24) return `${diffHrs}h ago`;
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
+
+
+
+
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -173,11 +151,11 @@ export default function Home() {
               <h3 className="font-display text-xl font-bold text-foreground">Client Buy Boxes</h3>
               <p className="text-[13px] text-[#A3A3A3] mt-1">Click to instantly search your client&apos;s criteria</p>
             </div>
-            <span className="text-[11px] font-mono text-[#7C7C7C] uppercase tracking-wider">{CLIENT_BUY_BOXES.length} Active</span>
+            <span className="text-[11px] font-mono text-[#7C7C7C] uppercase tracking-wider">{clientBuyBoxes.length} Active</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {CLIENT_BUY_BOXES.map((box) => (
+            {clientBuyBoxes.map((box) => (
               <button
                 key={box.slug}
                 onClick={() => handleBuyBox(box.slug)}
@@ -272,6 +250,7 @@ export default function Home() {
           </section>
         </div>
       </main>
+
 
       {/* Footer */}
       <footer className="border-t border-border py-6 px-8 text-center">

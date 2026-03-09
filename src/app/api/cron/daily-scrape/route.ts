@@ -6,6 +6,10 @@ import { fetchRealCompProperties } from "@/lib/realcomp/api";
 import { isRealcompCompliant, mapRealcompProperty } from "@/lib/realcomp/mapper";
 
 // Vercel Cron Jobs require a GET or POST handler
+export async function POST(req: Request) {
+    return GET(req);
+}
+
 export async function GET(req: Request) {
     try {
         console.log("[Cron] Starting daily property scrape...");
@@ -34,7 +38,7 @@ export async function GET(req: Request) {
         const finalListings = Array.from(uniqueMap.values());
 
         // Save to Database
-        const record = saveDailyScan(finalListings);
+        const record = await saveDailyScan(finalListings);
 
         console.log(`[Cron] Successfully scanned and locked in ${finalListings.length} properties for ${record.date}.`);
 

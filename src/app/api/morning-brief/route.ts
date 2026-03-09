@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateAnalysis } from "@/lib/gemini/client";
-import { getLiveApifyFeed } from "@/lib/apify/fetcher";
+import { getLatestScan } from "@/lib/db";
 
 import { checkTaxIncentives } from "@/app/api/tax-incentive-check/route";
 import { BuyBoxCriteria } from "@/lib/buybox";
@@ -54,7 +54,8 @@ export async function POST(req: Request) {
         }
 
         // 1. Fetch from data sources
-        const apifyFeed = await getLiveApifyFeed();
+        const scan = await getLatestScan();
+        const apifyFeed = scan?.properties || [];
 
         // 2. Feed is already normalized from Apify fetcher
         const mergedFeed = [...apifyFeed];
