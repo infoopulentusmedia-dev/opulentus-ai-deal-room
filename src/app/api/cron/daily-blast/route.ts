@@ -128,8 +128,8 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
     const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://opulentus.vercel.app';
     const PLACEHOLDER_IMG = 'https://placehold.co/600x300/171717/D4AF37?text=No+Image+Available';
 
-    const clientSectionsHTML = groupedResults.map(group => {
-        const propertyCardsHTML = group.deals.map((p: any) => {
+    const sectionsArray = await Promise.all(groupedResults.map(async group => {
+        const propertyCardsHTMLArray = await Promise.all(group.deals.map(async (p: any) => {
             // Image normalizer: Google Street View priority over bot-blocked CDNs
             let heroImage = '';
 
@@ -139,9 +139,22 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
             const encodedAddress = encodeURIComponent(fullAddress);
 
             if (mapKey && p.address && p.address.toLowerCase() !== 'unknown' && p.address.toLowerCase() !== 'off market') {
-                heroImage = `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${encodedAddress}&key=${mapKey}`;
-            } else {
-                // 2. Fallback to dynamic address placeholder if no API key or dummy address
+                // Check if Street View imagery actually exists for this location
+                try {
+                    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${encodedAddress}&key=${mapKey}`;
+                    const metaRes = await fetch(metaUrl);
+                    const metaData = await metaRes.json();
+
+                    if (metaData.status === 'OK') {
+                        heroImage = `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${encodedAddress}&key=${mapKey}`;
+                    }
+                } catch (e) {
+                    console.error("Street View metadata check failed", e);
+                }
+            }
+
+            // 2. Fallback to dynamic address placeholder if no API key, dummy address, or NO IMAGERY FOUND
+            if (!heroImage) {
                 const encodedPlaceholder = encodeURIComponent(p.address || 'Property Listing');
                 heroImage = `https://placehold.co/600x300/171717/D4AF37/png?text=${encodedPlaceholder}`;
             }
@@ -214,7 +227,9 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
                 </div>
             </div>
             `;
-        }).join("");
+        }));
+
+        const propertyCardsHTML = propertyCardsHTMLArray.join("");
 
         return `
             <div style="margin-top: 40px;">
@@ -223,7 +238,9 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
                 ${propertyCardsHTML}
             </div>
         `;
-    }).join("");
+    }));
+
+    const clientSectionsHTML = sectionsArray.join("");
 
     const htmlBody = `
     <html>
