@@ -11,7 +11,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 // Sender must be the verified Single Sender in SendGrid
 const FROM_EMAIL = "info.opulentusmedia@gmail.com";
 const FROM_NAME = "Opulentus AI";
-const TARGET_EMAIL = "Opulentosmedia@gmail.com";
+const TARGET_EMAIL = "safat@safatautomation.com";
 
 export async function POST(req: Request) {
     try {
