@@ -8,7 +8,7 @@ import sgMail from '@sendgrid/mail';
 // Initialize SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
-// Sender must be the verified Single Sender in SendGrid
+// Sender must be the verified Single Sender in SendGrid this is for 
 const FROM_EMAIL = "info.opulentusmedia@gmail.com";
 const FROM_NAME = "Opulentus AI";
 const TARGET_EMAIL = "safat@safatautomation.com";
@@ -175,7 +175,7 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
                 p.platform.split('-')[0].charAt(0).toUpperCase() + p.platform.split('-')[0].slice(1);
 
             // Deep link URL for AI Deal Room
-            const dealRoomUrl = `${APP_URL}/chat?property=${encodeURIComponent(p.sourceId || '')}`;
+            const dealRoomUrl = `${APP_URL}/chat?property=${encodeURIComponent(p.sourceId || '')}&buybox=${encodeURIComponent((group.client as any)?.id || group.client?.name || '')}`;
 
             return `
             <div style="background-color: #171717; border: 1px solid #242424; border-radius: 8px; margin-bottom: 20px; overflow: hidden;">

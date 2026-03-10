@@ -172,7 +172,16 @@ function ChatContent() {
                             const capStr = prop.capRate ? `${prop.capRate}% cap rate` : "no cap rate listed";
                             const domStr = prop.daysOnPlatform ? `${prop.daysOnPlatform} days on market` : "unknown DOM";
 
-                            const analysisPrompt = `Analyze this property from the daily email alert in detail: ${prop.address || "Unknown Address"}, ${prop.city || ""} ${prop.state || "MI"} ${prop.zipCode || ""} — ${priceStr}, ${prop.propertyType || "Commercial"}, ${sizeStr}, ${capStr}, ${domStr}. Description: ${(prop.description || "").slice(0, 300)}. Tell me everything: why it could be a good deal, what the risks are, what due diligence I should prioritize, and your overall recommendation.`;
+                            let boxContext = "";
+                            if (buyboxSlug) {
+                                const boxData = await loadClientBuyBox(buyboxSlug);
+                                if (boxData) {
+                                    const maxPriceStr = boxData.priceMax ? `$${(parseInt(boxData.priceMax) / 1000000).toFixed(1)}M` : 'any price';
+                                    boxContext = `, keeping in mind my strict criteria: ${boxData.propertyType} in ${boxData.location} under ${maxPriceStr}`;
+                                }
+                            }
+
+                            const analysisPrompt = `Analyze this property from the daily email alert in detail${boxContext}: ${prop.address || "Unknown Address"}, ${prop.city || ""} ${prop.state || "MI"} ${prop.zipCode || ""} — ${priceStr}, ${prop.propertyType || "Commercial"}, ${sizeStr}, ${capStr}, ${domStr}. Description: ${(prop.description || "").slice(0, 300)}. Tell me everything: why it could be a good deal, what the risks are, what due diligence I should prioritize, and your overall recommendation.`;
 
                             setTimeout(() => sendMessage(analysisPrompt), 400);
 
