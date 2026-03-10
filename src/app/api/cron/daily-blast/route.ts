@@ -162,7 +162,12 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
     const PLACEHOLDER_IMG = 'https://placehold.co/600x300/171717/D4AF37?text=No+Image+Available';
 
     const sectionsArray = await Promise.all(groupedResults.map(async group => {
-        const propertyCardsHTMLArray = await Promise.all(group.deals.map(async (p: any) => {
+        // Sort deals by highest AI Score and cap at Top 3 to strictly prevent Gmail 102KB clipping
+        const sortedDeals = [...group.deals].sort((a,b) => b.aiScore - a.aiScore);
+        const topDeals = sortedDeals.slice(0, 3);
+        const hiddenCount = sortedDeals.length - topDeals.length;
+
+        const propertyCardsHTMLArray = await Promise.all(topDeals.map(async (p: any) => {
             // Image normalizer: Google Street View priority over bot-blocked CDNs
             let heroImage = '';
 
@@ -271,18 +276,27 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
 
         const propertyCardsHTML = propertyCardsHTMLArray.join("");
 
+        const hiddenHTML = hiddenCount > 0 ? `
+            <div style="text-align: center; margin-bottom: 30px; padding: 10px;">
+                <a href="${APP_URL}" style="display: inline-block; padding: 12px 24px; border: 1px solid #333; border-radius: 4px; color: #A3A3A3; text-decoration: none; font-family: sans-serif; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+                    View ${hiddenCount} more matching deals in App →
+                </a>
+            </div>
+        ` : '';
+
         return `
             <div style="margin-top: 40px;">
                 <h2 style="color: #FAFAFA; border-bottom: 1px solid #333; padding-bottom: 10px; font-family: sans-serif;">Client: ${group.client.name}</h2>
-                <p style="color: #A3A3A3; font-family: sans-serif; margin-bottom: 20px;">AI identified <strong style="color: #D4AF37;">${group.deals.length}</strong> deal(s) matching their strict mandate.</p>
+                <p style="color: #A3A3A3; font-family: sans-serif; margin-bottom: 20px;">AI identified <strong style="color: #D4AF37;">${group.deals.length}</strong> total deal(s) matching their strict mandate.</p>
                 ${propertyCardsHTML}
+                ${hiddenHTML}
             </div>
         `;
     }));
 
     const clientSectionsHTML = sectionsArray.join("");
 
-    const htmlBody = `
+    const htmlBodyRaw = `
     <html>
         <body style="background-color: #0A0A0A; padding: 40px; margin: 0;">
             <div style="max-width: 600px; margin: 0 auto; font-family: sans-serif;">
@@ -301,10 +315,14 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
     </html>
     `;
 
+    // Minify HTML to completely eradicate Gmail 102KB clipping
+    const minifiedHtml = htmlBodyRaw.replace(/>\s+</g, '><').replace(/\r?\n|\r/g, '').trim();
+
     // Plain text fallback
     const plainText = groupedResults.map(group => {
         const clientHeader = `=== Client: ${group.client.name} ===`;
-        const dealsText = group.deals.map((p: any) =>
+        const top3DealsForText = [...group.deals].sort((a,b) => b.aiScore - a.aiScore).slice(0, 3);
+        const dealsText = top3DealsForText.map((p: any) =>
             `${p.address} | ${p.price ? '$' + p.price.toLocaleString() : 'Unpriced'} | ${p.propertyType || 'Commercial'} | AI Score: ${p.aiScore}/100\nInsight: ${p.aiReason}\nLink: ${p.propertyUrl || '#'}`
         ).join('\n\n');
         return `${clientHeader}\n${dealsText}`;
@@ -315,7 +333,7 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
         from: { email: FROM_EMAIL, name: FROM_NAME },
         subject: `Opulentus AI | ${totalDeals} Deals Routed across ${groupedResults.length} Clients`,
         text: `Opulentus Client Deal Router\n\n${plainText}\n\n---\nOpulentus 2026. All rights reserved.`,
-        html: htmlBody,
+        html: minifiedHtml,
     };
 
     const response = await sgMail.send(msg);
