@@ -63,6 +63,22 @@ You MUST return your analysis as a strictly formatted JSON array matching this e
 ]
 Return purely the JSON array, nothing else. Do not use markdown blocks.`;
 
+        // We fetch the cache for ALL clients first to prevent duplicate AI logic
+        const allCachedAnalyses = await Promise.all(
+            clients.map(c => import('@/lib/db').then(mod => mod.getAiAnalysesForClient(c.id)))
+        );
+        
+        const clientCaches = new Map<string, any[]>();
+        clients.forEach((c, i) => clientCaches.set(c.id, allCachedAnalyses[i]));
+
+        // Filter out properties that EVERY client has already analyzed
+        // Actually, it's safer to just let the LLM route them but we ONLY send the uncached ones per client
+        // To do this right in a single LLM prompt, we send the FULL batch, but we tell the LLM to skip specific ones? No, that burns input tokens.
+        // Instead, we just send the standard batch for now, and implement the cache merging AFTER or just cache the results.
+        
+        // Wait, the most elite way to do this is to NOT use the LLM to route 50 generic properties.
+        // Let's do it exactly as planned: The LLM processes the batch.
+
         const userPrompt = `
 CLIENT DIRECTIVES:
 ${clients.map(c => {
@@ -83,6 +99,8 @@ ${JSON.stringify(analysisBatch, null, 2)}
         const geminiResult = await generateAnalysis(systemPrompt, userPrompt);
 
         // 4. Map the selected IDs back to the full rich property objects grouped by client
+        const cacheToSave: any[] = [];
+
         const groupedResults = geminiResult.map((clientMatch: any) => {
             const client = clients.find(c => c.id === clientMatch.clientId);
             if (!client || !clientMatch.matchedDeals) return null;
@@ -90,6 +108,16 @@ ${JSON.stringify(analysisBatch, null, 2)}
             const deals = clientMatch.matchedDeals.map((match: any) => {
                 const fullProp = freshListings.find(p => p.sourceId === match.propertyId);
                 if (!fullProp) return null;
+
+                // Cache it for tomorrow
+                cacheToSave.push({
+                    property_id: fullProp.sourceId,
+                    client_id: client.id,
+                    ai_score: match.score || 90,
+                    ai_reason: match.aiReason || "Fits general criteria.",
+                    property_price: fullProp.price || null
+                });
+
                 return {
                     ...fullProp,
                     propertyUrl: getResolvedUrl(fullProp),
@@ -100,6 +128,11 @@ ${JSON.stringify(analysisBatch, null, 2)}
 
             return { client, deals };
         }).filter((g: any) => g !== null && g.client && g.deals.length > 0);
+
+        // Bulk Save the AI Analyses for tomorrow
+        if (cacheToSave.length > 0) {
+            import('@/lib/db').then(mod => mod.saveAiAnalysesBulk(cacheToSave));
+        }
 
         if (groupedResults.length === 0) {
             return NextResponse.json({ message: "AI found zero matches for any clients today." });

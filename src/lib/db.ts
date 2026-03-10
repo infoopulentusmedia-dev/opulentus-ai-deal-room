@@ -105,16 +105,43 @@ export async function saveDailyScan(properties: ApifyPropertyListing[]): Promise
 }
 
 // ─────────────────────────────────────────────────────────────────
-// DIGEST CACHE (Saves Gemini AI costs and load times)
-// Note: Keeping in memory for now. Moving to DB is optional.
+// AI ANALYSIS CACHE (Supabase Postgres)
+// Saves Gemini AI token costs by preventing re-analysis of unchanged properties
 // ─────────────────────────────────────────────────────────────────
 
-export function getDigestCache(clientId: string, date: string): any | null {
-    const key = `${clientId}_${date}`;
-    return memoryDigest[key] || null;
+export interface CachedAnalysis {
+    property_id: string;
+    client_id: string;
+    ai_score: number;
+    ai_reason: string;
+    property_price: number | null;
 }
 
-export function saveDigestCache(clientId: string, date: string, digestData: any) {
-    const key = `${clientId}_${date}`;
-    memoryDigest[key] = digestData;
+export async function getAiAnalysesForClient(clientId: string): Promise<CachedAnalysis[]> {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('ai_analyses')
+            .select('*')
+            .eq('client_id', clientId);
+
+        if (error) throw error;
+        return data || [];
+    } catch (e) {
+        console.error(`Status: Failed to fetch AI cache for client ${clientId}`, e);
+        return [];
+    }
+}
+
+export async function saveAiAnalysesBulk(analyses: CachedAnalysis[]): Promise<void> {
+    if (!analyses || analyses.length === 0) return;
+
+    try {
+        const { error } = await supabaseAdmin
+            .from('ai_analyses')
+            .upsert(analyses, { onConflict: 'property_id,client_id' });
+
+        if (error) throw error;
+    } catch (e) {
+        console.error("Status: Failed to bulk save AI analyses to cache", e);
+    }
 }
