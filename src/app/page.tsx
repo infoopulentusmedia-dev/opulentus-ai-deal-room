@@ -185,9 +185,9 @@ export default function Home() {
               {/* Hint Examples */}
               <div className="flex flex-wrap gap-2 mt-4">
                 {[
-                  "Add John, retail strip centers in Wayne County under $5M, john@deals.com",
-                  "Lock in Sarah for residential homes in 48124 zip, $400k-$700k",
-                  "New client Mike, multifamily anywhere in Michigan, max $2M"
+                  "My guy Fadi wants warehouses in Macomb County, budget around 1 to 4 mil, fadi@invest.com",
+                  "Lock in Sarah for residential homes near 48124, $400k-$700k, sarah@kw.com",
+                  "Name: Ali. Type: Strip center. Location: Wayne County. Budget: $1M-$5M. Email: ali@deals.com"
                 ].map((hint, i) => (
                   <button
                     key={i}
