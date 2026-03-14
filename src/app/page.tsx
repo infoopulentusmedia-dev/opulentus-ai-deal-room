@@ -177,6 +177,11 @@ export default function Home() {
                 } else if (result.intent === 'blast' && result.success) {
                   setCommandStatus({ message: result.message, type: 'success' });
 
+                } else if (result.intent === 'search' && result.success) {
+                  setCommandStatus({ message: `Routing to Deal Hunter...`, type: 'info' });
+                  router.push(`/chat?q=${encodeURIComponent(result.searchQuery)}`);
+                  return; // Exit early to keep loading state while navigating
+
                 } else {
                   setCommandStatus({ message: result.message || 'Command not understood.', type: 'error' });
                 }
@@ -232,7 +237,8 @@ export default function Home() {
                   "Update Ali's budget to $3M",
                   "Remove Mike from the roster",
                   "Show me Fadi's latest deals",
-                  "Send the daily blast now"
+                  "Send the daily blast now",
+                  "Find distressed multifamilies in Wayne County"
                 ].map((hint, i) => (
                   <button
                     key={i}

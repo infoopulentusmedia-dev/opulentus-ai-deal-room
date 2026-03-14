@@ -9,16 +9,24 @@ const INTENT_ROUTER = `You are the Opulentus Command Center Router.
 Your ONLY job is to classify a broker's command into exactly one intent and extract the relevant parameters.
 
 INTENTS:
-1. "add" — The user wants to ADD or CREATE a new client. Triggers: "add", "lock in", "new client", "sign up", "onboard", or any sentence describing a new person with property criteria.
+1. "add" — The user wants to ADD or CREATE a new client. Triggers: "add", "lock in", "new client", "sign up", "onboard", or any sentence describing a new person with property criteria AND their name.
 2. "edit" — The user wants to UPDATE or CHANGE an existing client's details. Triggers: "update", "change", "modify", "edit", "set", "switch", "adjust", "bump", "raise", "lower".
 3. "delete" — The user wants to REMOVE or DELETE an existing client. Triggers: "remove", "delete", "drop", "kick", "take off", "deactivate".
-4. "query" — The user wants to SEE or CHECK an existing client's status or matched deals. Triggers: "show", "what", "how", "check", "status", "deals for", "matches for", "latest for".
-5. "blast" — The user wants to TRIGGER the daily email blast immediately. Triggers: "send", "blast", "trigger", "fire", "email", "dispatch", "push the email".
+4. "query" — The user wants to SEE or CHECK an existing client's status or matched deals. Triggers: "show me [client]'s", "what did [client] get", "check [client]", "status for", "deals for", "matches for".
+5. "blast" — The user wants to TRIGGER the daily email blast immediately. Triggers: "send blast", "trigger blast", "fire the email", "dispatch", "push the email", "send the daily".
+6. "search" — The user wants to SEARCH for properties or deals in the MLS database. Triggers: "find", "search", "look for", "any", "properties", "listings", "deals", "foreclosures", "distressed", or any sentence describing property criteria WITHOUT mentioning a specific person to add/edit/remove. This is the DEFAULT if the command doesn't clearly match intents 1-5.
+
+CRITICAL DISTINCTION:
+- "Add Fadi, warehouses in Macomb" = "add" (has a person's name + onboarding language)
+- "Find warehouses in Macomb" = "search" (searching for properties, no person being added)
+- "Distressed multifamilies in Wayne County" = "search" (property search query)
+- "Show me Fadi's deals" = "query" (checking a specific person's info)
 
 OUTPUT STRICTLY VALID JSON:
 {
-  "intent": "add" | "edit" | "delete" | "query" | "blast",
-  "clientName": "Name of the client referenced (or empty if blast)",
+  "intent": "add" | "edit" | "delete" | "query" | "blast" | "search",
+  "clientName": "Name of the client referenced (or empty if blast/search)",
+  "searchQuery": "The property search query text (only for search intent, else empty)",
   "rawCommand": "The full original command repeated back"
 }
 `;
@@ -282,11 +290,26 @@ export async function POST(req: Request) {
                 }
             }
 
-            default:
+            // ───────────────────────────
+            // SEARCH (MLS Property Search)
+            // ───────────────────────────
+            case "search": {
+                const searchQuery = routing.searchQuery || prompt;
                 return NextResponse.json({
-                    intent: "unknown",
-                    success: false,
-                    message: "I didn't understand that command. Try: add a client, edit a client, remove a client, check a client's deals, or trigger the daily blast."
+                    intent: "search",
+                    success: true,
+                    searchQuery,
+                    message: `Searching: "${searchQuery}"`
+                });
+            }
+
+            default:
+                // Fallback: treat as a search query
+                return NextResponse.json({
+                    intent: "search",
+                    success: true,
+                    searchQuery: prompt,
+                    message: `Searching: "${prompt}"`
                 });
         }
 
