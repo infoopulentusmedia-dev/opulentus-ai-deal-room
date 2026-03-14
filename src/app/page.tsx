@@ -16,6 +16,17 @@ export default function Home() {
   const [isWatchtowerOpen, setIsWatchtowerOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [commandStatus, setCommandStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [isClientContext, setIsClientContext] = useState(false);
+
+  // Real-time keyword scanner for Client Context Halo
+  useEffect(() => {
+    const checkContext = () => {
+      const txt = searchInput.toLowerCase();
+      const isClient = /add |new client|lock in|onboard|sign up|edit |update |change |modify |delete |remove |drop |kick |show me|what did|check |status for|deals for|matches for|send blast|trigger blast|send the daily/i.test(txt);
+      setIsClientContext(isClient);
+    };
+    checkContext();
+  }, [searchInput]);
 
   useEffect(() => {
     const init = async () => {
@@ -105,9 +116,17 @@ export default function Home() {
             <p className="text-[#A3A3A3] text-sm mt-1">Add, edit, remove clients, check their deals, or trigger the daily blast — all from one command.</p>
           </div>
 
-          <div className="bg-[#171717] border border-[#242424] rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+          <div className="bg-[#171717] border border-[#242424] rounded-2xl p-5 shadow-2xl relative overflow-hidden transition-all duration-500">
+            {/* Floating Client Context Awareness Text */}
+            <div className={`absolute top-2 left-6 transition-all duration-500 ease-out z-10 pointer-events-none flex items-center gap-2 ${
+              isClientContext ? 'opacity-100 translate-y-0 text-green-500/90' : 'opacity-0 translate-y-3'
+            }`}>
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-xs font-mono font-medium tracking-wide">You are asking me concerning your clients...</span>
+            </div>
+
             {/* AI Command Center Bar */}
-            <form onSubmit={async (e) => {
+            <form className="relative z-20 mt-4" onSubmit={async (e) => {
               e.preventDefault();
               if (!searchInput.trim() || (window as any).__intakeLoading) return;
               (window as any).__intakeLoading = true;
@@ -198,8 +217,10 @@ export default function Home() {
               }
             }}>
               <div className="flex items-center gap-3">
-                <div className="flex-1 relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#D4AF37]">
+                <div className={`flex-1 relative rounded-xl transition-all duration-500 ${
+                  isClientContext ? 'shadow-[0_0_20px_rgba(34,197,94,0.15)] ring-1 ring-green-500/30' : ''
+                }`}>
+                  <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-500 ${isClientContext ? 'text-green-500' : 'text-[#D4AF37]'}`}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
                   </div>
                   <input
@@ -207,13 +228,17 @@ export default function Home() {
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     placeholder={'Add a client, edit criteria, remove someone, check deals, or fire the blast...'}
-                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl pl-12 pr-4 py-4 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors"
+                    className={`w-full bg-[#0A0A0A] border rounded-xl pl-12 pr-4 py-4 text-sm text-foreground placeholder:text-[#555] focus:outline-none transition-colors duration-500 relative z-20 ${
+                      isClientContext ? 'border-green-500/50 focus:border-green-500' : 'border-[#333] focus:border-[#D4AF37]'
+                    }`}
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={!searchInput.trim()}
-                  className="h-[54px] px-6 bg-[#D4AF37] hover:bg-[#E5C158] text-black font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className={`relative z-20 h-[54px] px-6 font-bold text-sm rounded-xl transition-all duration-500 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ${
+                    isClientContext ? 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'bg-[#D4AF37] hover:bg-[#E5C158] text-black'
+                  }`}
                 >
                   Execute
                 </button>
