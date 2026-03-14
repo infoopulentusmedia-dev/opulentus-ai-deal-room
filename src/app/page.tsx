@@ -97,50 +97,92 @@ export default function Home() {
 
       <main className="flex-1 flex flex-col px-6 md:px-12 max-w-7xl mx-auto w-full py-10 gap-12">
 
-        {/* Hero */}
-        <section className="flex flex-col items-center text-center max-w-3xl mx-auto w-full gap-8 pt-8">
-          <div>
-            <p className="text-[11px] font-mono text-primary uppercase tracking-[0.2em] mb-4 font-medium">AI-Powered Deal Intelligence</p>
-            <h2 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[1.1] tracking-tight">
-              Hunt deals with<br />
-              unfair advantages.
-            </h2>
+        {/* Hero: Inline Client Intake */}
+        <section className="flex flex-col max-w-4xl mx-auto w-full gap-6 pt-4">
+          <div className="text-center mb-2">
+            <h2 className="font-display text-3xl font-bold text-foreground tracking-tight">Master Router Portfolio</h2>
+            <p className="text-[#A3A3A3] text-sm mt-1">Configure client mandates to instantly hook them into the 7:00 AM Automated Deal Flow.</p>
           </div>
 
-          {/* Search Bar */}
-          <div className="w-full max-w-2xl relative">
-            <div className="relative flex items-center bg-[#0A0A0A] rounded-xl border border-border focus-within:border-[#404040] transition-colors overflow-hidden">
-              <svg className="ml-5 text-muted-foreground shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Search MLS by address, ID, or describe what you want..."
-                className="flex-1 bg-transparent px-4 py-4 outline-none text-sm text-foreground placeholder:text-muted-foreground"
-              />
-              <button
-                onClick={handleSearch}
-                disabled={!searchInput.trim()}
-                className="h-10 w-10 flex items-center justify-center bg-[#242424] text-foreground rounded border border-border mr-2 hover:bg-[#333333] disabled:opacity-50 transition-colors shrink-0"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-              </button>
-            </div>
-          </div>
+          <div className="bg-[#171717] border border-[#242424] rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+            {/* Form Fields */}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const name = (form.elements.namedItem('name') as HTMLInputElement).value;
+              const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+              const type = (form.elements.namedItem('type') as HTMLSelectElement).value;
+              const location = (form.elements.namedItem('location') as HTMLInputElement).value;
+              const priceMax = (form.elements.namedItem('priceMax') as HTMLInputElement).value;
 
-          {/* Quick Prompts */}
-          <div className="flex flex-wrap gap-2 justify-center mt-2">
+              const payload = {
+                id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+                name,
+                email,
+                propertyType: type,
+                location,
+                priceMin: "",
+                priceMax: priceMax.replace(/[^0-9]/g, ""),
+              };
 
-            {["Distressed multifamilies in Wayne County", "Properties with <10 DOM", "Latest foreclosures near Detroit"].map((prompt, i) => (
-              <button
-                key={i}
-                onClick={() => router.push(`/chat?q=${encodeURIComponent(prompt)}`)}
-                className="text-[11px] font-mono px-4 py-1.5 rounded-full border border-border bg-[#171717] hover:border-[#404040] hover:text-[#FAFAFA] transition-colors text-[#A3A3A3] cursor-pointer"
-              >
-                {prompt}
-              </button>
-            ))}
+              // Submit to Supabase
+              const res = await fetch('/api/clients', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+
+              if (res.ok) {
+                // Instantly inject into UI
+                setClientBuyBoxes(prev => {
+                   const icon = type.toLowerCase().includes("residential") ? "🏡" : 
+                               (type.toLowerCase().includes("industrial") ? "🏭" : "🏢");
+                   const priceStr = priceMax ? `$0 – $${(parseInt(priceMax.replace(/[^0-9]/g, "")) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "Any Price";
+                   
+                   const newBox = { slug: payload.id, name, type, location, price: priceStr, icon, isNew: true };
+                   return [newBox, ...prev.filter(b => b.slug !== payload.id)];
+                });
+                form.reset();
+              }
+            }}>
+              
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="md:col-span-2">
+                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Client Name</label>
+                    <input name="name" required placeholder="e.g. John Doe" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
+                </div>
+                <div className="md:col-span-3">
+                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Blast Email (For 7:00 AM Routing)</label>
+                    <input name="email" required type="email" placeholder="john@investments.com" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-4">
+                <div className="md:col-span-4">
+                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Asset Class</label>
+                    <select name="type" required className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-[#D4AF37] transition-colors appearance-none">
+                        <option value="Strip Center / Retail Plaza">Retail / Strip Center</option>
+                        <option value="Warehouse / Industrial">Industrial / Warehouse</option>
+                        <option value="Multifamily">Multifamily</option>
+                        <option value="Mechanic / Dealership">Mechanic / Dealership</option>
+                        <option value="Residential">Residential</option>
+                    </select>
+                </div>
+                <div className="md:col-span-4">
+                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Location Target</label>
+                    <input name="location" required placeholder="e.g. Wayne County" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Max Price</label>
+                    <input name="priceMax" required placeholder="$5,000,000" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
+                </div>
+                <div className="md:col-span-2 flex items-end">
+                    <button type="submit" className="w-full h-[42px] bg-[#D4AF37] hover:bg-[#E5C158] text-black font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
+                        Lock In
+                    </button>
+                </div>
+              </div>
+            </form>
           </div>
         </section>
 
@@ -162,7 +204,13 @@ export default function Home() {
                 className="group text-left p-5 rounded-xl border border-border bg-[#171717] hover:border-[#404040] transition-colors relative overflow-hidden"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="text-2xl opacity-80">{box.icon}</div>
+                  <div className="flex items-center gap-3">
+                      <div className="text-2xl opacity-80">{box.icon}</div>
+                      <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                          <span className="text-[9px] font-mono text-green-500 uppercase tracking-widest">Active Router</span>
+                      </div>
+                  </div>
                   <svg className="text-[#A3A3A3] group-hover:text-foreground transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                 </div>
                 <h4 className="font-display font-medium text-[15px] text-[#FAFAFA] mb-1">{box.name}</h4>

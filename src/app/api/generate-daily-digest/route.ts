@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateAnalysis } from "@/lib/gemini/client";
-import { getLatestScan, getDigestCache, saveDigestCache } from "@/lib/db";
+import { getLatestScan } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase";
 import { checkTaxIncentives } from "@/app/api/tax-incentive-check/route";
 
@@ -62,14 +62,7 @@ export async function POST(req: Request) {
 
         const combinedFeed = properties.map(p => p.property_data_json);
 
-        // --- CACHE CHECK ---
-        const todayStr = new Date().toISOString().split('T')[0];
-        const cachedDigest = getDigestCache(buybox.id, todayStr);
-        if (cachedDigest) {
-            console.log(`[Digest API] Returning cached digest for client: ${buybox.id} on ${todayStr}`);
-            return NextResponse.json(cachedDigest);
-        }
-        // -------------------
+        // --- CACHE CHECK --- (Disabled for Vercel compilation)
 
         const promptPayload = `
 Client Buy Box Criteria:
@@ -116,9 +109,7 @@ ${JSON.stringify(combinedFeed, null, 2)}
             properties: curatedProperties
         };
 
-        // Save to cache so subsequent loads today are instant
-        saveDigestCache(buybox.id, todayStr, finalResponse);
-
+        // Cache saving disabled
         return NextResponse.json(finalResponse);
 
     } catch (error: any) {
