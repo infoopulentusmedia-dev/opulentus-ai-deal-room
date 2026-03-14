@@ -97,90 +97,107 @@ export default function Home() {
 
       <main className="flex-1 flex flex-col px-6 md:px-12 max-w-7xl mx-auto w-full py-10 gap-12">
 
-        {/* Hero: Inline Client Intake */}
+        {/* Hero: AI-Powered Chat Bar Client Intake */}
         <section className="flex flex-col max-w-4xl mx-auto w-full gap-6 pt-4">
           <div className="text-center mb-2">
             <h2 className="font-display text-3xl font-bold text-foreground tracking-tight">Master Router Portfolio</h2>
-            <p className="text-[#A3A3A3] text-sm mt-1">Configure client mandates to instantly hook them into the 7:00 AM Automated Deal Flow.</p>
+            <p className="text-[#A3A3A3] text-sm mt-1">Type a command to instantly onboard clients into the 7:00 AM Automated Deal Flow.</p>
           </div>
 
-          <div className="bg-[#171717] border border-[#242424] rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-            {/* Form Fields */}
+          <div className="bg-[#171717] border border-[#242424] rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+            {/* AI Chat Bar */}
             <form onSubmit={async (e) => {
               e.preventDefault();
-              const form = e.target as HTMLFormElement;
-              const name = (form.elements.namedItem('name') as HTMLInputElement).value;
-              const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-              const type = (form.elements.namedItem('type') as HTMLSelectElement).value;
-              const location = (form.elements.namedItem('location') as HTMLInputElement).value;
-              const priceMax = (form.elements.namedItem('priceMax') as HTMLInputElement).value;
+              if (!searchInput.trim() || (window as any).__intakeLoading) return;
+              (window as any).__intakeLoading = true;
 
-              const payload = {
-                id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-                name,
-                email,
-                propertyType: type,
-                location,
-                priceMin: "",
-                priceMax: priceMax.replace(/[^0-9]/g, ""),
-              };
+              // Show loading state
+              const btn = (e.target as HTMLFormElement).querySelector('button[type=submit]') as HTMLButtonElement;
+              const originalText = btn.innerHTML;
+              btn.innerHTML = '<div class="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>';
+              btn.disabled = true;
 
-              // Submit to Supabase
-              const res = await fetch('/api/clients', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
-
-              if (res.ok) {
-                // Instantly inject into UI
-                setClientBuyBoxes(prev => {
-                   const icon = type.toLowerCase().includes("residential") ? "🏡" : 
-                               (type.toLowerCase().includes("industrial") ? "🏭" : "🏢");
-                   const priceStr = priceMax ? `$0 – $${(parseInt(priceMax.replace(/[^0-9]/g, "")) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "Any Price";
-                   
-                   const newBox = { slug: payload.id, name, type, location, price: priceStr, icon, isNew: true };
-                   return [newBox, ...prev.filter(b => b.slug !== payload.id)];
+              try {
+                const res = await fetch('/api/intake-client-nlp', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ prompt: searchInput.trim() })
                 });
-                form.reset();
+
+                if (res.ok) {
+                  const { client } = await res.json();
+                  const bb = client.buy_box_json || {};
+                  const typeStr = (bb.propertyType || "Commercial").toLowerCase();
+                  let icon = "🏢";
+                  if (typeStr.includes("residential")) icon = "🏡";
+                  else if (typeStr.includes("industrial") || typeStr.includes("warehouse")) icon = "🏭";
+                  else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
+                  else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
+                  else if (typeStr.includes("multifamily")) icon = "🏘️";
+
+                  const min = bb.priceMin ? `$${(parseInt(bb.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
+                  const max = bb.priceMax ? `$${(parseInt(bb.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
+                  let priceStr = `${min} – ${max}`;
+
+                  const newBox = {
+                    slug: client.id || bb.id || client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+                    name: client.name,
+                    type: bb.propertyType || "Commercial",
+                    location: bb.location || "Any Location",
+                    price: priceStr,
+                    icon,
+                    isNew: true
+                  };
+
+                  setClientBuyBoxes(prev => [newBox, ...prev.filter(b => b.slug !== newBox.slug)]);
+                  setSearchInput("");
+                }
+              } catch (err) {
+                console.error("NLP Intake Error:", err);
+              } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                (window as any).__intakeLoading = false;
               }
             }}>
-              
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div className="md:col-span-2">
-                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Client Name</label>
-                    <input name="name" required placeholder="e.g. John Doe" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
+              <div className="flex items-center gap-3">
+                <div className="flex-1 relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#D4AF37]">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder={`"Add Fadi, industrial warehouses in Macomb County $1M-$4M, fadi@invest.com"`}
+                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl pl-12 pr-4 py-4 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors"
+                  />
                 </div>
-                <div className="md:col-span-3">
-                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Blast Email (For 7:00 AM Routing)</label>
-                    <input name="email" required type="email" placeholder="john@investments.com" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
-                </div>
+                <button
+                  type="submit"
+                  disabled={!searchInput.trim()}
+                  className="h-[54px] px-6 bg-[#D4AF37] hover:bg-[#E5C158] text-black font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  Lock In
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-4">
-                <div className="md:col-span-4">
-                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Asset Class</label>
-                    <select name="type" required className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-[#D4AF37] transition-colors appearance-none">
-                        <option value="Strip Center / Retail Plaza">Retail / Strip Center</option>
-                        <option value="Warehouse / Industrial">Industrial / Warehouse</option>
-                        <option value="Multifamily">Multifamily</option>
-                        <option value="Mechanic / Dealership">Mechanic / Dealership</option>
-                        <option value="Residential">Residential</option>
-                    </select>
-                </div>
-                <div className="md:col-span-4">
-                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Location Target</label>
-                    <input name="location" required placeholder="e.g. Wayne County" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
-                </div>
-                <div className="md:col-span-2">
-                    <label className="block text-[10px] font-mono text-[#7C7C7C] uppercase mb-1.5 ml-1">Max Price</label>
-                    <input name="priceMax" required placeholder="$5,000,000" className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors" />
-                </div>
-                <div className="md:col-span-2 flex items-end">
-                    <button type="submit" className="w-full h-[42px] bg-[#D4AF37] hover:bg-[#E5C158] text-black font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
-                        Lock In
-                    </button>
-                </div>
+              {/* Hint Examples */}
+              <div className="flex flex-wrap gap-2 mt-4">
+                {[
+                  "Add John, retail strip centers in Wayne County under $5M, john@deals.com",
+                  "Lock in Sarah for residential homes in 48124 zip, $400k-$700k",
+                  "New client Mike, multifamily anywhere in Michigan, max $2M"
+                ].map((hint, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSearchInput(hint)}
+                    className="text-[10px] font-mono px-3 py-1 rounded-full border border-[#242424] bg-[#0A0A0A] hover:border-[#D4AF37]/40 hover:text-[#D4AF37] transition-colors text-[#555] cursor-pointer truncate max-w-[280px]"
+                  >
+                    {hint}
+                  </button>
+                ))}
               </div>
             </form>
           </div>
