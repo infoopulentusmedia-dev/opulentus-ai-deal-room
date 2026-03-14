@@ -42,6 +42,13 @@ export async function GET() {
         }
 
         // ── Phase 2: Gemini Deal Routing (same prompt as daily-blast) ──
+        // the reason why i am doing this is to test the deal routing is so that i can see how the deal routing is working and if there are any issues with it and even above tha
+
+
+
+
+
+
         const analysisBatch = freshListings.slice(0, 50).map(p => ({
             id: p.sourceId,
             platform: p.platform,
@@ -221,12 +228,16 @@ ${JSON.stringify(analysisBatch, null, 2)}
 
         diagnostics.phase4_urlValidation = urlValidationResults;
 
+     
+     
         // ── Phase 5: Image Validation ──────────────────────────────────
+
+        // this section is purely for testing purposes and will be removed in the production code but we need to remember that this is here because... 
         const imageResults: any[] = [];
         const propsWithImages = allMatchedDeals.filter(d => d.images && d.images.length > 0 && d.images[0]);
         const propsWithoutImages = allMatchedDeals.filter(d => !d.images || d.images.length === 0 || !d.images[0]);
 
-        // Test a sample of image URLs (limit to 10)
+        // Test a sample of image URLs (limit to 10) this will not be in the 
         for (const deal of propsWithImages.slice(0, 10)) {
             let imgUrl = '';
             const mapKey = process.env.GOOGLE_MAPS_API_KEY;

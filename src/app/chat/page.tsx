@@ -9,6 +9,7 @@ import { WATCHLIST_PROPERTIES } from "@/lib/mockData";
 import MogulFactLoader from "@/components/MogulFactLoader";
 
 import { loadClientBuyBox } from "@/lib/buybox";
+import DeepSearchProgress from "@/components/DeepSearchProgress";
 
 interface Message {
     role: "user" | "model";
@@ -24,6 +25,7 @@ function ChatContent() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [activeSearchQuery, setActiveSearchQuery] = useState("");
     const [activeProperty, setActiveProperty] = useState<any>(null);
     const [selectedForComparison, setSelectedForComparison] = useState<any[]>([]);
     const [sessionId, setSessionId] = useState<string>("");
@@ -368,6 +370,7 @@ function ChatContent() {
     const sendMessage = async (query: string) => {
         const currentMessages = [...messages, { role: "user" as const, text: query }];
         setMessages(currentMessages);
+        setActiveSearchQuery(query);
         setIsLoading(true);
 
         try {
@@ -617,8 +620,8 @@ function ChatContent() {
                             </motion.div>
                         )}
                         {isLoading && (
-                            <div className="my-4">
-                                <MogulFactLoader message="Querying Multi-Data Node..." />
+                            <div className="my-10 w-full max-w-2xl mx-auto">
+                                <DeepSearchProgress query={activeSearchQuery} />
                             </div>
                         )}
                         <div ref={messagesEndRef} />
