@@ -15,6 +15,7 @@ export default function Home() {
   const [clientBuyBoxes, setClientBuyBoxes] = useState<any[]>([]);
   const [isWatchtowerOpen, setIsWatchtowerOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
+  const [commandStatus, setCommandStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -100,32 +101,34 @@ export default function Home() {
         {/* Hero: AI-Powered Chat Bar Client Intake */}
         <section className="flex flex-col max-w-4xl mx-auto w-full gap-6 pt-4">
           <div className="text-center mb-2">
-            <h2 className="font-display text-3xl font-bold text-foreground tracking-tight">Master Router Portfolio</h2>
-            <p className="text-[#A3A3A3] text-sm mt-1">Type a command to instantly onboard clients into the 7:00 AM Automated Deal Flow.</p>
+            <h2 className="font-display text-3xl font-bold text-foreground tracking-tight">Master Router Command Center</h2>
+            <p className="text-[#A3A3A3] text-sm mt-1">Add, edit, remove clients, check their deals, or trigger the daily blast — all from one command.</p>
           </div>
 
           <div className="bg-[#171717] border border-[#242424] rounded-2xl p-5 shadow-2xl relative overflow-hidden">
-            {/* AI Chat Bar */}
+            {/* AI Command Center Bar */}
             <form onSubmit={async (e) => {
               e.preventDefault();
               if (!searchInput.trim() || (window as any).__intakeLoading) return;
               (window as any).__intakeLoading = true;
+              setCommandStatus(null);
 
-              // Show loading state
               const btn = (e.target as HTMLFormElement).querySelector('button[type=submit]') as HTMLButtonElement;
               const originalText = btn.innerHTML;
               btn.innerHTML = '<div class="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>';
               btn.disabled = true;
 
               try {
-                const res = await fetch('/api/intake-client-nlp', {
+                const res = await fetch('/api/command-center', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ prompt: searchInput.trim() })
                 });
 
-                if (res.ok) {
-                  const { client } = await res.json();
+                const result = await res.json();
+
+                if (result.intent === 'add' && result.success) {
+                  const client = result.client;
                   const bb = client.buy_box_json || {};
                   const typeStr = (bb.propertyType || "Commercial").toLowerCase();
                   let icon = "🏢";
@@ -134,30 +137,59 @@ export default function Home() {
                   else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
                   else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
                   else if (typeStr.includes("multifamily")) icon = "🏘️";
-
                   const min = bb.priceMin ? `$${(parseInt(bb.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
                   const max = bb.priceMax ? `$${(parseInt(bb.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
-                  let priceStr = `${min} – ${max}`;
-
                   const newBox = {
                     slug: client.id || bb.id || client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-                    name: client.name,
-                    type: bb.propertyType || "Commercial",
-                    location: bb.location || "Any Location",
-                    price: priceStr,
-                    icon,
-                    isNew: true
+                    name: client.name, type: bb.propertyType || "Commercial",
+                    location: bb.location || "Any Location", price: `${min} – ${max}`, icon, isNew: true
                   };
-
                   setClientBuyBoxes(prev => [newBox, ...prev.filter(b => b.slug !== newBox.slug)]);
-                  setSearchInput("");
+                  setCommandStatus({ message: result.message, type: 'success' });
+
+                } else if (result.intent === 'edit' && result.success) {
+                  const client = result.client;
+                  const bb = client.buy_box_json || {};
+                  const typeStr = (bb.propertyType || "Commercial").toLowerCase();
+                  let icon = "🏢";
+                  if (typeStr.includes("residential")) icon = "🏡";
+                  else if (typeStr.includes("industrial") || typeStr.includes("warehouse")) icon = "🏭";
+                  else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
+                  else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
+                  else if (typeStr.includes("multifamily")) icon = "🏘️";
+                  const min = bb.priceMin ? `$${(parseInt(bb.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
+                  const max = bb.priceMax ? `$${(parseInt(bb.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
+                  const slug = client.id || bb.id || client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                  setClientBuyBoxes(prev => prev.map(b => b.name === client.name ? {
+                    ...b, type: bb.propertyType || b.type, location: bb.location || b.location,
+                    price: `${min} – ${max}`, icon
+                  } : b));
+                  setCommandStatus({ message: result.message, type: 'success' });
+
+                } else if (result.intent === 'delete' && result.success) {
+                  setClientBuyBoxes(prev => prev.filter(b => b.name !== result.deletedName));
+                  setCommandStatus({ message: result.message, type: 'success' });
+
+                } else if (result.intent === 'query' && result.success) {
+                  const matchCount = result.recentMatches?.length || 0;
+                  setCommandStatus({ message: `${result.message} | ${matchCount} recent AI matches found.`, type: 'info' });
+
+                } else if (result.intent === 'blast' && result.success) {
+                  setCommandStatus({ message: result.message, type: 'success' });
+
+                } else {
+                  setCommandStatus({ message: result.message || 'Command not understood.', type: 'error' });
                 }
+
+                setSearchInput("");
               } catch (err) {
-                console.error("NLP Intake Error:", err);
+                console.error("Command Center Error:", err);
+                setCommandStatus({ message: 'Something went wrong. Please try again.', type: 'error' });
               } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 (window as any).__intakeLoading = false;
+                setTimeout(() => setCommandStatus(null), 6000);
               }
             }}>
               <div className="flex items-center gap-3">
@@ -169,7 +201,7 @@ export default function Home() {
                     type="text"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder={`"Add Fadi, industrial warehouses in Macomb County $1M-$4M, fadi@invest.com"`}
+                    placeholder={'Add a client, edit criteria, remove someone, check deals, or fire the blast...'}
                     className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl pl-12 pr-4 py-4 text-sm text-foreground placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37] transition-colors"
                   />
                 </div>
@@ -178,16 +210,29 @@ export default function Home() {
                   disabled={!searchInput.trim()}
                   className="h-[54px] px-6 bg-[#D4AF37] hover:bg-[#E5C158] text-black font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
-                  Lock In
+                  Execute
                 </button>
               </div>
+
+              {/* Command Status Toast */}
+              {commandStatus && (
+                <div className={`mt-3 px-4 py-2.5 rounded-lg text-sm font-mono border ${
+                  commandStatus.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
+                  commandStatus.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                  'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                }`}>
+                  {commandStatus.message}
+                </div>
+              )}
 
               {/* Hint Examples */}
               <div className="flex flex-wrap gap-2 mt-4">
                 {[
-                  "My guy Fadi wants warehouses in Macomb County, budget around 1 to 4 mil, fadi@invest.com",
-                  "Lock in Sarah for residential homes near 48124, $400k-$700k, sarah@kw.com",
-                  "Name: Ali. Type: Strip center. Location: Wayne County. Budget: $1M-$5M. Email: ali@deals.com"
+                  "Add Fadi, warehouses in Macomb, $1-4M, fadi@invest.com",
+                  "Update Ali's budget to $3M",
+                  "Remove Mike from the roster",
+                  "Show me Fadi's latest deals",
+                  "Send the daily blast now"
                 ].map((hint, i) => (
                   <button
                     key={i}
