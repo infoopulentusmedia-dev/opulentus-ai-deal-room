@@ -451,10 +451,13 @@ function ChatContent() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ property }),
             });
+            if (!res.ok) throw new Error("Status " + res.status);
             const data = await res.json();
             setTabData(prev => ({ ...prev, [type]: data }));
         } catch (err) {
             console.error(`Failed to fetch ${type}:`, err);
+            // set empty or fallback data so the infinite loader stops
+            setTabData(prev => ({ ...prev, [type]: { error: true, roiTranslation: "Data unavailable", projectedZoning: "Unavailable", aadt: 0, oneMileIncome: 0, scenarios: [] } }));
         }
     };
 
@@ -752,7 +755,7 @@ function ChatContent() {
                                                         List Price
                                                     </div>
                                                     <div className="text-2xl font-mono font-medium text-[#FAFAFA]">${(activeProperty.listPrice || 0).toLocaleString()}</div>
-                                                    {activeProperty.squareFeet && (
+                                                    {activeProperty.listPrice > 0 && activeProperty.squareFeet > 0 && (
                                                         <div className="text-[11px] font-mono text-[#7C7C7C] mt-2 flex items-center gap-1.5">
                                                             <span className="text-[#A3A3A3]">~</span>${Math.round(activeProperty.listPrice / activeProperty.squareFeet)} <span className="uppercase tracking-wider text-[#A3A3A3]">/ sqft</span>
                                                         </div>

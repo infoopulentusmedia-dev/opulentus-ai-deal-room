@@ -17,7 +17,8 @@ export async function GET(req: Request) {
 
     const { data, error } = await query;
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("Supabase fetch chat_sessions error:", error);
+        return NextResponse.json([], { status: 200 }); // Graceful degradation
     }
 
     return NextResponse.json(data);
