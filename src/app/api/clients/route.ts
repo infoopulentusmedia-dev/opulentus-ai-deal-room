@@ -29,36 +29,57 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Client name is required" }, { status: 400 });
         }
 
-        const upsertPayload: any = {
-            name: name,
-            updated_at: new Date().toISOString()
-        };
+        const now = new Date().toISOString();
 
-        // Only update these columns if provided in the payload
+        // Build the payload of fields to set
+        const fields: any = { updated_at: now };
         if (Object.keys(restOfBuyBox).length > 0) {
-            upsertPayload.buy_box_json = restOfBuyBox;
+            fields.buy_box_json = restOfBuyBox;
         }
-
         if (alert_preferences_json !== undefined) {
-            upsertPayload.alert_preferences_json = alert_preferences_json;
+            fields.alert_preferences_json = alert_preferences_json;
         }
-
         if (email !== undefined) {
-            upsertPayload.email = email;
+            fields.email = email;
         }
 
-        // We use the admin client so it bypasses RLS safely on the backend
-        const { data, error } = await supabaseAdmin.from('clients').upsert(
-            upsertPayload,
-            { onConflict: 'name' }
-        ).select();
+        // Check if a client with this name already exists
+        const { data: existing, error: findError } = await supabaseAdmin
+            .from('clients')
+            .select('id')
+            .eq('name', name)
+            .maybeSingle();
+
+        if (findError) {
+            console.error("Supabase lookup error:", findError);
+            return NextResponse.json({ error: findError.message }, { status: 500 });
+        }
+
+        let data, error;
+
+        if (existing) {
+            // UPDATE the existing client by their UUID
+            ({ data, error } = await supabaseAdmin
+                .from('clients')
+                .update(fields)
+                .eq('id', existing.id)
+                .select()
+                .single());
+        } else {
+            // INSERT as a new client
+            ({ data, error } = await supabaseAdmin
+                .from('clients')
+                .insert({ name, ...fields })
+                .select()
+                .single());
+        }
 
         if (error) {
             console.error("Supabase POST /api/clients error:", error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true, client: data[0] });
+        return NextResponse.json({ success: true, client: data });
 
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
