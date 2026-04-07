@@ -31,14 +31,24 @@ export async function GET(req: Request) {
         const manifest = await manifestRes.json();
         const clientIds: string[] = manifest.clientIds || [];
 
-        // Fetch all briefs in parallel
+        // Fetch all briefs in parallel (with JSON parse safety)
         const briefPromises = clientIds.map(async (id: string) => {
             try {
                 const url = `${SUPABASE_URL}/storage/v1/object/public/briefs/${id}.json?t=${Date.now()}`;
                 const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) return [id, null];
-                const data = await res.json();
-                return [id, data];
+                const text = await res.text();
+                try {
+                    const data = JSON.parse(text);
+                    // Ensure critical arrays exist to prevent frontend crashes
+                    if (!Array.isArray(data.properties)) data.properties = [];
+                    if (!Array.isArray(data.nearMisses)) data.nearMisses = [];
+                    if (typeof data.matchCount !== "number") data.matchCount = data.properties.length;
+                    return [id, data];
+                } catch {
+                    console.error(`[Client Briefs] Corrupt JSON for client ${id}`);
+                    return [id, null];
+                }
             } catch {
                 return [id, null];
             }

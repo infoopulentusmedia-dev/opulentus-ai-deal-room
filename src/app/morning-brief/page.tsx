@@ -53,13 +53,14 @@ export default function MorningBriefPage() {
         init();
     }, []);
 
-    // Update summary totals when results change
+    // Update summary totals when results change (null-safe: properties may be missing/undefined)
     useEffect(() => {
         let matches = 0;
         let hot = 0;
         Object.values(results).forEach(r => {
-            matches += r.matchCount;
-            r.properties.forEach((p: any) => {
+            matches += r.matchCount || 0;
+            const props = Array.isArray(r.properties) ? r.properties : [];
+            props.forEach((p: any) => {
                 if (p.aiMatchScore && p.aiMatchScore >= 85) hot++;
             });
         });
@@ -71,8 +72,8 @@ export default function MorningBriefPage() {
         setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    const getClientIcon = (type: string) => {
-        const t = type.toLowerCase();
+    const getClientIcon = (type: string | undefined | null) => {
+        const t = (type || "").toLowerCase();
         if (t.includes("strip") || t.includes("retail")) return "🏬";
         if (t.includes("warehouse") || t.includes("industrial")) return "🏭";
         if (t.includes("mechanic") || t.includes("collision") || t.includes("auto")) return "🔧";
@@ -81,7 +82,7 @@ export default function MorningBriefPage() {
         return "📋";
     };
 
-    const getSourceBadge = (platform: string) => {
+    const getSourceBadge = (platform: string | undefined | null) => {
         switch (platform) {
             case "mls": return { label: "MLS", color: "bg-blue-500/10 text-blue-400 border-blue-500/30" };
             case "crexi": return { label: "CREXI", color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" };
@@ -175,7 +176,7 @@ export default function MorningBriefPage() {
                         {clients.map(client => {
                             const result = results[client.id!];
                             const isExpanded = expanded[client.id!];
-                            const icon = getClientIcon(client.propertyType || "");
+                            const icon = getClientIcon(client.propertyType);
 
                             return (
                                 <div key={client.id} className="bg-[#171717] border border-[#242424] rounded-2xl overflow-hidden transition-colors hover:border-[#333]">
@@ -220,17 +221,17 @@ export default function MorningBriefPage() {
                                                     </div>
 
                                                     {/* Matched Properties */}
-                                                    {result.properties.length > 0 && (
+                                                    {(result.properties?.length || 0) > 0 && (
                                                         <div className="space-y-4">
-                                                            {result.properties.map((prop: any, idx: number) => {
+                                                            {(result.properties || []).map((prop: any, idx: number) => {
                                                                 const badge = getSourceBadge(prop.platform);
                                                                 return (
                                                                     <div key={`${prop.platform}-${prop.sourceId}-${idx}`} className="bg-[#0A0A0A] border border-[#242424] rounded-xl overflow-hidden hover:border-[#D4AF37]/40 transition-all duration-200 cursor-pointer group" onClick={() => { sessionStorage.setItem('deal_room_transfer', JSON.stringify(prop)); router.push('/chat?transfer=true'); }}>
                                                                         <div className="p-4">
                                                                             <div className="flex items-start justify-between mb-2">
                                                                                 <div>
-                                                                                    <h4 className="font-display text-sm font-medium text-white">{prop.address}</h4>
-                                                                                    <p className="text-[11px] text-[#7C7C7C] mt-0.5">{prop.city}, {prop.state} {prop.zipCode}</p>
+                                                                                    <h4 className="font-display text-sm font-medium text-white">{prop.address || "Address unavailable"}</h4>
+                                                                                    <p className="text-[11px] text-[#7C7C7C] mt-0.5">{[prop.city, prop.state].filter(Boolean).join(", ")}{prop.zipCode ? ` ${prop.zipCode}` : ""}</p>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2 shrink-0">
                                                                                     <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${badge.color} uppercase tracking-wider`}>{badge.label}</span>
@@ -267,14 +268,14 @@ export default function MorningBriefPage() {
                                                     )}
 
                                                     {/* Near Misses */}
-                                                    {result.properties.length === 0 && result.nearMisses && result.nearMisses.length > 0 && (
+                                                    {(result.properties?.length || 0) === 0 && result.nearMisses && result.nearMisses.length > 0 && (
                                                         <div>
                                                             <div className="flex items-center gap-2 mb-4">
                                                                 <span className="text-sm">🎯</span>
                                                                 <h4 className="text-sm font-display font-medium text-[#D4AF37]">Worth a Second Look</h4>
                                                             </div>
                                                             <div className="space-y-3">
-                                                                {result.nearMisses.map((nm: any, i: number) => (
+                                                                {(result.nearMisses || []).map((nm: any, i: number) => (
                                                                     <div key={i} className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-xl p-4">
                                                                         <div className="flex items-start justify-between mb-2">
                                                                             <h5 className="text-sm font-medium text-white">{nm.address || "Property"}</h5>
@@ -293,7 +294,7 @@ export default function MorningBriefPage() {
                                                     )}
 
                                                     {/* Zero matches, zero near misses */}
-                                                    {result.properties.length === 0 && (!result.nearMisses || result.nearMisses.length === 0) && (
+                                                    {(result.properties?.length || 0) === 0 && (!result.nearMisses || result.nearMisses.length === 0) && (
                                                         <div className="text-center py-8 bg-[#0A0A0A] border border-[#242424] rounded-xl">
                                                             <span className="text-3xl mb-3 block">🔍</span>
                                                             <p className="text-sm text-[#A3A3A3] mb-1">Market's quiet for {client.name} today.</p>

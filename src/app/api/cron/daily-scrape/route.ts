@@ -42,29 +42,32 @@ export async function GET(req: Request) {
 
         console.log(`[Cron] Successfully scanned and locked in ${finalListings.length} properties for ${record.date}.`);
 
-        // After scraping, trigger pre-computed morning briefs for all clients
-        // FIRE-AND-FORGET: Don't await — brief generation runs independently with its own 300s timeout.
-        // Awaiting it here risks the cron timing out (scrape + brief gen could exceed 300s combined).
-        try {
-            // Smart URL resolution: prefer explicit env var, but never use localhost in production
-            const rawUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-            const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
-            const appUrl = (rawUrl && !rawUrl.includes("localhost")) ? rawUrl : (vercelUrl || "https://opulentus.vercel.app");
-            const cronSecret = process.env.CRON_SECRET || "";
-            console.log("[Cron] Triggering morning brief generation (fire-and-forget)...");
-            fetch(`${appUrl}/api/generate-client-briefs`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(cronSecret ? { "x-cron-secret": cronSecret } : {}),
-                },
-            }).then(res => {
-                console.log(`[Cron] Brief generation responded with status: ${res.status}`);
-            }).catch(err => {
-                console.error("[Cron] Brief generation trigger failed (non-fatal):", err.message);
-            });
-        } catch (briefErr: any) {
-            console.error("[Cron] Brief generation trigger failed (non-fatal):", briefErr.message);
+        // ZERO-SCRAPE GUARD: Only trigger brief generation if we actually got properties.
+        // If all scrapers failed, don't regenerate — it would wipe yesterday's good briefs.
+        if (finalListings.length > 0) {
+            // FIRE-AND-FORGET: Don't await — brief generation runs independently with its own 300s timeout.
+            try {
+                const rawUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+                const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
+                const appUrl = (rawUrl && !rawUrl.includes("localhost")) ? rawUrl : (vercelUrl || "https://opulentus.vercel.app");
+                const cronSecret = process.env.CRON_SECRET || "";
+                console.log("[Cron] Triggering morning brief generation (fire-and-forget)...");
+                fetch(`${appUrl}/api/generate-client-briefs`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(cronSecret ? { "x-cron-secret": cronSecret } : {}),
+                    },
+                }).then(res => {
+                    console.log(`[Cron] Brief generation responded with status: ${res.status}`);
+                }).catch(err => {
+                    console.error("[Cron] Brief generation trigger failed (non-fatal):", err.message);
+                });
+            } catch (briefErr: any) {
+                console.error("[Cron] Brief generation trigger failed (non-fatal):", briefErr.message);
+            }
+        } else {
+            console.warn("[Cron] ZERO properties scraped — skipping brief generation to preserve existing briefs.");
         }
 
         return NextResponse.json({

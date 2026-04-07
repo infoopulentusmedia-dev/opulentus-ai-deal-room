@@ -7,6 +7,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const CRON_SECRET = process.env.CRON_SECRET || "";
 
+// Vercel function timeout safety margin (bail 30s before hard kill)
+const MAX_DURATION_MS = 270_000; // 270s (300s max - 30s safety margin)
+const INTER_CLIENT_DELAY_MS = 600; // 600ms between Gemini calls to avoid rate limits
+
 const BRIEF_SYSTEM = `You are an elite Commercial Real Estate Acquisitions Director for Opulentus Private Wealth.
 A client's "Buy Box" criteria and a filtered set of properties will be provided. Your job is to:
 
@@ -14,7 +18,7 @@ A client's "Buy Box" criteria and a filtered set of properties will be provided.
 2. For each property, assign a matchScore (0-100), write a 2-3 sentence reasoning, and list any redFlags.
 3. If ZERO properties match, find 1-3 "nearMisses" — properties that ALMOST matched but missed on one dimension.
 
-Return JSON matching this schema:
+Return ONLY valid JSON (no explanation text) matching this schema:
 {
     "briefing": "1-2 sentence summary tailored to this specific client.",
     "curatedProperties": [
@@ -42,15 +46,28 @@ interface ClientRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Safe price parser: handles "$500,000", "1,200,000", "500000", etc.
+// ---------------------------------------------------------------------------
+function safeParsePrice(val: any): number {
+    if (typeof val === "number") return val;
+    if (typeof val === "string") {
+        const cleaned = val.replace(/[^0-9.]/g, "");
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Pre-filter: score properties against a client's buy box and return top 30
 // ---------------------------------------------------------------------------
 function preFilterProperties(properties: any[], buyBox: any): any[] {
-    if (!buyBox) return properties.slice(0, 30);
+    if (!buyBox || Object.keys(buyBox).length === 0) return properties.slice(0, 30);
 
     const location = (buyBox.location || "").toLowerCase();
     const propType = (buyBox.propertyType || "").toLowerCase();
-    const priceMax = parseInt(buyBox.priceMax) || Infinity;
-    const priceMin = parseInt(buyBox.priceMin) || 0;
+    const priceMax = safeParsePrice(buyBox.priceMax) || Infinity;
+    const priceMin = safeParsePrice(buyBox.priceMin) || 0;
 
     const locationKeywords = location
         .split(/[,|/&]+/)
@@ -63,8 +80,9 @@ function preFilterProperties(properties: any[], buyBox: any): any[] {
         const pType = (pData.propertyType || p.property_type || "").toLowerCase();
         const pCity = (pData.city || "").toLowerCase();
         const pState = (pData.state || "").toLowerCase();
-        const pZip = pData.zipCode || pData.zip_code || "";
-        const pPrice = typeof pData.price === "number" ? pData.price : (typeof p.price === "number" ? p.price : null);
+        const pZip = String(pData.zipCode || pData.zip_code || "");
+        const rawPrice = pData.price ?? p.price;
+        const pPrice = typeof rawPrice === "number" ? rawPrice : safeParsePrice(rawPrice);
 
         // Type match (fuzzy)
         if (propType && pType) {
@@ -95,7 +113,7 @@ function preFilterProperties(properties: any[], buyBox: any): any[] {
         }
 
         // Price match
-        if (pPrice !== null && pPrice > 0) {
+        if (pPrice > 0) {
             if (pPrice >= priceMin && pPrice <= priceMax) score += 20;
             else if (pPrice <= priceMax * 1.3 && pPrice >= priceMin * 0.7) score += 10;
         }
@@ -105,6 +123,32 @@ function preFilterProperties(properties: any[], buyBox: any): any[] {
 
     scored.sort((a, b) => b.score - a.score);
     return scored.filter(s => s.score > 0).slice(0, 30).map(s => s.property);
+}
+
+// ---------------------------------------------------------------------------
+// Trim property data for Gemini: only send essential fields to avoid
+// exceeding input token limits (no image URLs, raw HTML, huge descriptions)
+// ---------------------------------------------------------------------------
+function trimForAI(prop: any): any {
+    return {
+        sourceId: prop.sourceId || prop.id,
+        platform: prop.platform,
+        address: prop.address,
+        city: prop.city,
+        state: prop.state,
+        zipCode: prop.zipCode || prop.zip_code,
+        propertyType: prop.propertyType || prop.property_type,
+        price: prop.price,
+        buildingSizeSqft: prop.buildingSizeSqft,
+        lotSizeSqft: prop.lotSizeSqft,
+        yearBuilt: prop.yearBuilt,
+        capRate: prop.capRate,
+        noi: prop.noi,
+        occupancy: prop.occupancy,
+        units: prop.units,
+        transactionType: prop.transactionType,
+        status: prop.status,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +222,13 @@ async function callGeminiWithRetry(systemPrompt: string, userPrompt: string, ret
                 // Exponential backoff: 2s, 4s
                 await new Promise(r => setTimeout(r, 2000 * attempt));
             }
-            return await generateAnalysis(systemPrompt, userPrompt);
+            const result = await generateAnalysis(systemPrompt, userPrompt);
+
+            // Validate response structure — Gemini must return an object
+            if (!result || typeof result !== "object") {
+                throw new Error("Gemini returned non-object response");
+            }
+            return result;
         } catch (err: any) {
             lastError = err;
             console.warn(`[Brief Gen] Gemini attempt ${attempt + 1} failed: ${err.message}`);
@@ -210,7 +260,17 @@ async function generateBriefForClient(client: ClientRecord, allProperties: any[]
         return result;
     }
 
-    const feedForAI = filtered.map(p => p.property_data_json || p);
+    // Extract property data, filter out null/empty blobs, trim for AI
+    const feedForAI = filtered
+        .map(p => p.property_data_json || p)
+        .filter(p => p && typeof p === "object" && (p.address || p.sourceId)); // Skip empty/garbage
+
+    if (feedForAI.length === 0) {
+        result.briefing = `Properties found but data was incomplete. We'll keep scanning.`;
+        return result;
+    }
+
+    const trimmedFeed = feedForAI.map(trimForAI);
 
     try {
         const promptPayload = `
@@ -225,31 +285,41 @@ Buy Box Criteria:
 - Max Size: ${buyBox.sizeMax || "None"}
 - Special: ${buyBox.specialCriteria || "None"}
 
-Filtered Property Feed (${feedForAI.length} properties):
-${JSON.stringify(feedForAI, null, 2)}
+Filtered Property Feed (${trimmedFeed.length} properties):
+${JSON.stringify(trimmedFeed, null, 2)}
 `;
 
         const aiAnalysis = await callGeminiWithRetry(BRIEF_SYSTEM, promptPayload);
 
         const curatedProperties = (aiAnalysis.curatedProperties || []).map((ai: any) => {
-            const rawProp = feedForAI.find((p: any) => p.sourceId === ai.sourceId);
+            // Match by sourceId against FULL property data (not trimmed)
+            const rawProp = feedForAI.find((p: any) =>
+                p.sourceId === ai.sourceId || p.id === ai.sourceId
+            );
             if (!rawProp) return null;
-            const taxResult = checkTaxIncentives(rawProp.zipCode || "");
+
+            let taxResult = null;
+            try {
+                taxResult = checkTaxIncentives(rawProp.zipCode || rawProp.zip_code || "");
+            } catch { /* non-fatal */ }
+
             return {
                 ...rawProp,
-                aiReasoning: ai.reasoning,
-                aiMatchScore: ai.matchScore,
-                aiRedFlags: ai.redFlags || [],
+                aiReasoning: ai.reasoning || "",
+                aiMatchScore: typeof ai.matchScore === "number" ? ai.matchScore : 70,
+                aiRedFlags: Array.isArray(ai.redFlags) ? ai.redFlags : [],
                 taxIncentives: taxResult,
             };
         }).filter(Boolean);
 
         const nearMisses = (aiAnalysis.nearMisses || []).map((nm: any) => {
-            const rawProp = feedForAI.find((p: any) => p.sourceId === nm.sourceId);
+            const rawProp = feedForAI.find((p: any) =>
+                p.sourceId === nm.sourceId || p.id === nm.sourceId
+            );
             return {
                 ...(rawProp || {}),
-                whyItAlmostMatched: nm.whyItAlmostMatched,
-                suggestion: nm.suggestion,
+                whyItAlmostMatched: nm.whyItAlmostMatched || "",
+                suggestion: nm.suggestion || "",
             };
         });
 
@@ -263,7 +333,12 @@ ${JSON.stringify(feedForAI, null, 2)}
         result.briefing = `Found ${Math.min(filtered.length, 5)} properties that may match ${client.name}'s criteria. AI analysis temporarily unavailable.`;
         result.properties = filtered.slice(0, 5).map(p => {
             const d = p.property_data_json || p;
-            return { ...d, aiMatchScore: 70, aiReasoning: "Matched based on location and property type criteria." };
+            return {
+                ...d,
+                aiMatchScore: 70,
+                aiReasoning: "Matched based on location and property type criteria.",
+                aiRedFlags: [],
+            };
         });
         result.matchCount = result.properties.length;
     }
@@ -293,7 +368,7 @@ async function loadRecentProperties(): Promise<any[]> {
             .select("id, platform, address, price, property_type, property_data_json")
             .order("id", { ascending: false })
             .limit(500);
-        return props || [];
+        return (props || []).filter(p => p.property_data_json != null);
     }
 
     // Collect unique property IDs from recent scans
@@ -321,21 +396,22 @@ async function loadRecentProperties(): Promise<any[]> {
         if (props) allProperties.push(...props);
     }
 
-    return allProperties;
+    // Filter out rows with null property_data_json — they'll cause garbage in AI + frontend
+    return allProperties.filter(p => p.property_data_json != null);
 }
 
 // ---------------------------------------------------------------------------
 // MAIN: Generate briefs for all clients or a single client
 // ---------------------------------------------------------------------------
 export async function POST(req: Request) {
+    const startTime = Date.now();
+
     try {
         // Auth check: if CRON_SECRET is configured, require it via header or query param
-        // This prevents unauthorized external calls to this expensive endpoint
         if (CRON_SECRET) {
             const headerSecret = req.headers.get("x-cron-secret") || "";
             const { searchParams: authParams } = new URL(req.url);
             const querySecret = authParams.get("secret") || "";
-            // Also allow Vercel's built-in cron authorization header
             const vercelCron = req.headers.get("authorization") === `Bearer ${CRON_SECRET}`;
             if (headerSecret !== CRON_SECRET && querySecret !== CRON_SECRET && !vercelCron) {
                 return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -375,28 +451,80 @@ export async function POST(req: Request) {
         const allProperties = await loadRecentProperties();
         console.log(`[Brief Gen] Loaded ${allProperties.length} recent properties, generating briefs for ${clients.length} client(s)`);
 
-        // 3. Generate briefs sequentially (respect Gemini rate limits)
+        // ZERO-SCRAPE PROTECTION: If we have 0 properties and this is a full generation
+        // (not single-client), don't overwrite existing briefs — the scrape probably failed.
+        if (allProperties.length === 0 && !singleClientId) {
+            console.warn("[Brief Gen] ZERO properties loaded — skipping brief generation to preserve existing briefs.");
+            return NextResponse.json({
+                success: true,
+                generated: 0,
+                skipped: true,
+                reason: "Zero properties available — preserving existing briefs. Check scraper health.",
+            });
+        }
+
+        // 3. Generate briefs sequentially with rate throttle and timeout guard
         const results: Record<string, any> = {};
-        for (const client of clients) {
+        let timedOut = false;
+
+        for (let i = 0; i < clients.length; i++) {
+            const client = clients[i];
+
+            // TIMEOUT GUARD: Check if we're approaching the Vercel function limit
+            const elapsed = Date.now() - startTime;
+            if (elapsed > MAX_DURATION_MS) {
+                console.warn(`[Brief Gen] Approaching timeout (${Math.round(elapsed / 1000)}s elapsed). Stopping after ${i}/${clients.length} clients.`);
+                timedOut = true;
+                // Mark remaining clients as skipped (don't overwrite their existing briefs)
+                for (let j = i; j < clients.length; j++) {
+                    results[clients[j].id] = { matchCount: null, skipped: true };
+                }
+                break;
+            }
+
             try {
-                console.log(`[Brief Gen] Processing ${client.name}...`);
+                console.log(`[Brief Gen] Processing ${client.name} (${i + 1}/${clients.length})...`);
                 const brief = await generateBriefForClient(client, allProperties);
                 results[client.id] = brief;
-                await uploadBrief(client.id, brief);
-                console.log(`[Brief Gen] Stored brief for ${client.name}: ${brief.matchCount} matches`);
+
+                // Upload brief to storage
+                try {
+                    await uploadBrief(client.id, brief);
+                    console.log(`[Brief Gen] Stored brief for ${client.name}: ${brief.matchCount} matches`);
+                } catch (uploadErr: any) {
+                    // Upload failed — try once more, then log and continue
+                    console.error(`[Brief Gen] Upload failed for ${client.name}, retrying...`, uploadErr.message);
+                    try {
+                        await new Promise(r => setTimeout(r, 1000));
+                        await uploadBrief(client.id, brief);
+                    } catch (retryErr: any) {
+                        console.error(`[Brief Gen] Upload retry also failed for ${client.name}:`, retryErr.message);
+                    }
+                }
             } catch (err: any) {
                 console.error(`[Brief Gen] Failed for ${client.name}:`, err.message);
-                results[client.id] = {
+                const errorBrief = {
                     clientId: client.id,
                     clientName: client.name,
                     generatedAt: new Date().toISOString(),
                     scanDate: new Date().toISOString().split("T")[0],
-                    briefing: `Brief generation failed for ${client.name}. Will retry on next cycle.`,
+                    briefing: `Brief generation temporarily unavailable for ${client.name}. Will retry on next cycle.`,
                     matchCount: 0,
                     properties: [],
                     nearMisses: [],
                     error: err.message,
                 };
+                results[client.id] = errorBrief;
+
+                // Upload error brief so frontend shows current state instead of stale data
+                try {
+                    await uploadBrief(client.id, errorBrief);
+                } catch { /* non-fatal */ }
+            }
+
+            // RATE THROTTLE: Small delay between Gemini calls to avoid 429 rate limits
+            if (i < clients.length - 1) {
+                await new Promise(r => setTimeout(r, INTER_CLIENT_DELAY_MS));
             }
         }
 
@@ -438,13 +566,19 @@ export async function POST(req: Request) {
         return NextResponse.json({
             success: true,
             generated: clients.length,
+            timedOut,
+            durationMs: Date.now() - startTime,
             results: Object.fromEntries(
-                Object.entries(results).map(([id, r]: [string, any]) => [id, { matchCount: r.matchCount, error: r.error }])
+                Object.entries(results).map(([id, r]: [string, any]) => [id, {
+                    matchCount: r.matchCount ?? 0,
+                    error: r.error,
+                    skipped: r.skipped,
+                }])
             ),
         });
     } catch (err: any) {
         console.error("[Brief Gen] Error:", err.message);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        return NextResponse.json({ error: err.message, durationMs: Date.now() - startTime }, { status: 500 });
     }
 }
 
