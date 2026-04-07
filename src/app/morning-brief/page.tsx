@@ -79,6 +79,17 @@ const DEMO_PROPERTIES: Record<string, ClientBriefResult> = {
             { sourceId: "MLS-68041203", platform: "mls", address: "4902 Schaefer Rd", city: "Dearborn", state: "MI", zipCode: "48126", price: 178000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1100, aiMatchScore: 89, aiReasoning: "48126 corridor, 3BR brick ranch updated kitchen. Low Dearborn taxes, strong rental demand. Priced 8% below recent comps — immediate equity on acquisition.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
             { sourceId: "MLS-68043801", platform: "mls", address: "7234 Bingham St", city: "Dearborn", state: "MI", zipCode: "48126", price: 204000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1350, aiMatchScore: 85, aiReasoning: "48126 area, recently renovated 4BR. Strong school district adds resale upside. Seller open to creative terms — ideal for Moe's acquisition strategy.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
+    },
+    "nick-from-kw": {
+        clientId: "nick-from-kw", clientName: "Nick from KW",
+        briefing: "Three office properties surfaced near Nick's downriver target — Dearborn Michigan Ave corridor and Detroit metro office inventory, all from our live database.",
+        matchCount: 3,
+        nearMisses: [],
+        properties: [
+            { sourceId: "CRX-1793495", platform: "crexi", address: "23954 Michigan Ave", city: "Dearborn", state: "MI", zipCode: "48124", price: 1650000, propertyType: "Office", buildingSizeSqft: 8200, aiMatchScore: 94, aiReasoning: "Michigan Ave office directly adjacent to Allen Park border — prime downriver corridor. $1.65M asking price, strong office tenant demand in this submarket.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "LN-40020080", platform: "loopnet", address: "1686-1752 Howard St", city: "Detroit", state: "MI", zipCode: "48216", price: 5283000, propertyType: "Office", buildingSizeSqft: 35219, aiMatchScore: 88, aiReasoning: "Large-format Detroit office with 35,219 SF — institutional quality near Mexicantown/Corktown. Value-add repositioning opportunity for office-to-flex conversion.", taxIncentives: { isOpportunityZone: true, isRenaissanceZone: false } },
+            { sourceId: "LN-39661719", platform: "loopnet", address: "26026-26038 Woodward Ave", city: "Royal Oak", state: "MI", zipCode: "48067", price: 1500000, propertyType: "Office", buildingSizeSqft: 5049, aiMatchScore: 85, aiReasoning: "Royal Oak Woodward Ave office — premium location with high foot traffic. $1.5M entry point, strong for professional office tenants in Oakland County.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
+        ]
     }
 };
 
