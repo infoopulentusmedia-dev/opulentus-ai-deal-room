@@ -125,7 +125,7 @@ export async function loadPersonalBuyBox(): Promise<BuyBoxCriteria | null> {
 
 export async function saveBuyBox(criteria: BuyBoxCriteria): Promise<void> {
     const globalCriteria = { ...criteria, id: GLOBAL_BUYBOX_ID, name: "Global Feed" };
-    return saveClientBuyBox(globalCriteria);
+    await saveClientBuyBox(globalCriteria);
 }
 
 export async function loadBuyBox(): Promise<BuyBoxCriteria | null> {
