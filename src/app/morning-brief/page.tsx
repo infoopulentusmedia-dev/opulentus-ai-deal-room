@@ -278,7 +278,7 @@ export default function MorningBriefPage() {
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="border-t border-[#242424] px-6 py-6">
-                                            {isLoading ? (
+                                            {isLoading && !result ? (
                                                 <MogulFactLoader message={`Scanning for ${client.name?.replace(/^[^\s]+\s/, '')}...`} />
                                             ) : result ? (
                                                 <div className="space-y-6">
