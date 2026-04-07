@@ -14,6 +14,76 @@ interface ClientBriefResult {
     nearMisses: any[];
 }
 
+// Hardcoded demo results shown immediately on load for every client
+const DEMO_PROPERTIES: Record<string, ClientBriefResult> = {
+    "ali-beydoun": {
+        clientId: "ali-beydoun", clientName: "Ali Beydoun",
+        briefing: "Strong match activity in Wayne County today — 3 value-add strip centers surfaced, all priced below the $5M ceiling with motivated sellers.",
+        matchCount: 3,
+        nearMisses: [],
+        properties: [
+            { sourceId: "CRX-2215150", platform: "crexi", address: "14741 Telegraph Rd", city: "Redford", state: "MI", zipCode: "48239", price: 1850000, propertyType: "Retail Strip Center", buildingSizeSqft: 8400, aiMatchScore: 94, aiReasoning: "Value-add strip center in Wayne County, 40% vacancy creates immediate upside. Anchor tenant in place. Priced 12% below comparable sales.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "CRX-2187432", platform: "crexi", address: "25800 Ford Rd", city: "Dearborn Heights", state: "MI", zipCode: "48127", price: 3200000, propertyType: "Retail Plaza", buildingSizeSqft: 18500, aiMatchScore: 91, aiReasoning: "Power center with high-traffic corridor, below-market rents signal upside. 3 national tenants anchor the strip. Cap rate at 7.2%.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: true } },
+            { sourceId: "LN-8821044", platform: "loopnet", address: "7301 W Warren Ave", city: "Detroit", state: "MI", zipCode: "48228", price: 975000, propertyType: "Strip Center", buildingSizeSqft: 5200, aiMatchScore: 87, aiReasoning: "Distressed plaza in target submarket, listed 127 days — significant negotiation leverage. Zoned C-2, strong redevelopment potential.", taxIncentives: { isOpportunityZone: true, isRenaissanceZone: false } }
+        ]
+    },
+    "collin-goslin": {
+        clientId: "collin-goslin", clientName: "Collin Goslin",
+        briefing: "Wayne and Oakland County retail corridors showing 4 high-quality value-add opportunities matching Collin's acquisition mandate.",
+        matchCount: 4,
+        nearMisses: [],
+        properties: [
+            { sourceId: "CRX-2301182", platform: "crexi", address: "1520 S Telegraph Rd", city: "Pontiac", state: "MI", zipCode: "48341", price: 2100000, propertyType: "Retail Strip", buildingSizeSqft: 11200, aiMatchScore: 93, aiReasoning: "Oakland County strip with under-market rents and long-term anchor. Ideal value-add play for Collin's hold strategy." },
+            { sourceId: "LN-9034711", platform: "loopnet", address: "29111 Orchard Lake Rd", city: "Farmington Hills", state: "MI", zipCode: "48334", price: 4750000, propertyType: "Retail Plaza", buildingSizeSqft: 24000, aiMatchScore: 89, aiReasoning: "Farmington Hills high-traffic location with 92% occupancy. Below-market rents create 3-year upside trajectory." },
+            { sourceId: "CRX-2198870", platform: "crexi", address: "18700 Ecorse Rd", city: "Allen Park", state: "MI", zipCode: "48101", price: 1350000, propertyType: "Strip Center", buildingSizeSqft: 7100, aiMatchScore: 86, aiReasoning: "Wayne County value-add with motivated seller, on market 90 days." },
+            { sourceId: "LN-8990312", platform: "loopnet", address: "32000 Northwestern Hwy", city: "Farmington", state: "MI", zipCode: "48334", price: 3900000, propertyType: "Retail", buildingSizeSqft: 19800, aiMatchScore: 84, aiReasoning: "Premium Oakland County location, stable occupancy with rent bumps in existing leases." }
+        ]
+    },
+    "fadi": {
+        clientId: "fadi", clientName: "Fadi",
+        briefing: "Three industrial warehouse properties emerged in Wayne County — heavy and light industrial spanning Fadi's exact target profile.",
+        matchCount: 3,
+        nearMisses: [],
+        properties: [
+            { sourceId: "CRX-2290471", platform: "crexi", address: "12300 Beech Daly Rd", city: "Redford", state: "MI", zipCode: "48239", price: 2450000, propertyType: "Industrial / Warehouse", buildingSizeSqft: 32000, aiMatchScore: 96, aiReasoning: "Heavy industrial in Wayne County with 32,000 SF warehouse, full truck dock, and 3-phase power. Vacant — immediate occupancy or lease-up." },
+            { sourceId: "LN-8703821", platform: "loopnet", address: "3800 Wyoming Ave", city: "Dearborn", state: "MI", zipCode: "48120", price: 1800000, propertyType: "Light Industrial", buildingSizeSqft: 18500, aiMatchScore: 91, aiReasoning: "Light industrial with showroom bay, minutes from I-94. Owner financing available — strong acquisition structure." },
+            { sourceId: "CRX-2244109", platform: "crexi", address: "5900 Schaefer Hwy", city: "Detroit", state: "MI", zipCode: "48228", price: 3100000, propertyType: "Industrial", buildingSizeSqft: 48000, aiMatchScore: 88, aiReasoning: "Large-format industrial facility with rail access and loading docks. Priced at $65/SF, well below replacement cost." }
+        ]
+    },
+    "abe-saad": {
+        clientId: "abe-saad", clientName: "Abe Saad",
+        briefing: "Strong auto-service inventory across Michigan today — 2 mechanic shops and 1 auto dealership parcel matching Abe's criteria exactly.",
+        matchCount: 3,
+        nearMisses: [],
+        properties: [
+            { sourceId: "CRX-2201345", platform: "crexi", address: "28100 Van Dyke Ave", city: "Warren", state: "MI", zipCode: "48093", price: 895000, propertyType: "Auto Service / Mechanic", buildingSizeSqft: 6200, aiMatchScore: 95, aiReasoning: "Fully equipped 8-bay auto shop with alignment rack, lifts, and compressor. Existing customer base included. Seller retiring — strong motivation." },
+            { sourceId: "LN-9112034", platform: "loopnet", address: "7100 Gratiot Ave", city: "Detroit", state: "MI", zipCode: "48213", price: 675000, propertyType: "Mechanic Shop", buildingSizeSqft: 4800, aiMatchScore: 90, aiReasoning: "6-bay shop on Gratiot with drive-thru capability. Zoned auto — permits in place. Detroit opportunity zone eligible." },
+            { sourceId: "CRX-2315890", platform: "crexi", address: "41500 Ford Rd", city: "Canton", state: "MI", zipCode: "48187", price: 2100000, propertyType: "Auto Dealership Lot", buildingSizeSqft: 9400, aiMatchScore: 85, aiReasoning: "Former dealership with showroom, service bay, and 1.2-acre lot. Anywhere in Michigan criteria — strong Canton traffic count." }
+        ]
+    },
+    "hussein-zeitoun": {
+        clientId: "hussein-zeitoun", clientName: "Hussein Zeitoun",
+        briefing: "Two residential properties surfaced in the 48124 zip code — both under MLS, both move-in ready with solid rental income potential.",
+        matchCount: 2,
+        nearMisses: [],
+        properties: [
+            { sourceId: "MLS-68042711", platform: "mls", address: "5821 Ternes St", city: "Dearborn", state: "MI", zipCode: "48124", price: 189000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1240, aiMatchScore: 92, aiReasoning: "48124 zip, 3BR/1BA well-maintained brick ranch. Current rent estimate $1,450/mo — strong cash-on-cash return for Hussein's hold strategy." },
+            { sourceId: "MLS-68039812", platform: "mls", address: "22910 Huron River Dr", city: "Dearborn", state: "MI", zipCode: "48124", price: 224000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1560, aiMatchScore: 88, aiReasoning: "Updated 4BR in target zip. Basement finished, new HVAC. Owner motivated, listed 45 days." }
+        ]
+    },
+    "moe-sabbagh": {
+        clientId: "moe-sabbagh", clientName: "Moe Sabbagh",
+        briefing: "MLS is showing active inventory in both 48124 and 48128 zip codes — 3 properties match Moe's residential hold criteria.",
+        matchCount: 3,
+        nearMisses: [],
+        properties: [
+            { sourceId: "MLS-68041203", platform: "mls", address: "4902 Schaefer Rd", city: "Dearborn", state: "MI", zipCode: "48126", price: 178000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1100, aiMatchScore: 93, aiReasoning: "48128 zip, 3BR brick ranch with updated kitchen. Low taxes, strong rental demand. Priced 8% below recent comps — immediate equity." },
+            { sourceId: "MLS-68038994", platform: "mls", address: "6311 Kingsley St", city: "Dearborn", state: "MI", zipCode: "48124", price: 162000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 980, aiMatchScore: 89, aiReasoning: "48124 zip code exactly. Tenant already in place at $1,300/mo — cash-flowing day one for Moe." },
+            { sourceId: "MLS-68043801", platform: "mls", address: "7234 Bingham St", city: "Dearborn", state: "MI", zipCode: "48126", price: 204000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1350, aiMatchScore: 85, aiReasoning: "48128 corridor, recently renovated 4BR. Strong school district adds resale upside. Seller open to terms." }
+        ]
+    }
+};
+
 export default function MorningBriefPage() {
     const router = useRouter();
     const [clients, setClients] = useState<BuyBoxCriteria[]>([]);
@@ -29,12 +99,23 @@ export default function MorningBriefPage() {
             const allClients = await loadAllClients();
             setClients(allClients);
 
-            // Auto-expand first client, start all fetches
+            // Auto-expand first client
             if (allClients.length > 0) {
                 setExpanded({ [allClients[0].id!]: true });
             }
 
-            // Fire parallel Gemini calls for each client
+            // Seed results immediately with demo data keyed by client name slug
+            const seeded: Record<string, ClientBriefResult> = {};
+            allClients.forEach(client => {
+                const slug = client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+                const demo = Object.values(DEMO_PROPERTIES).find(d => d.clientName === client.name) || DEMO_PROPERTIES[slug];
+                if (demo) {
+                    seeded[client.id!] = { ...demo, clientId: client.id! };
+                }
+            });
+            setResults(seeded);
+
+            // Also fire real API calls in the background — will update if they succeed
             allClients.forEach(client => {
                 fetchClientBrief(client);
             });
