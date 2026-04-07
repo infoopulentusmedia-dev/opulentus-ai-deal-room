@@ -94,6 +94,14 @@ export default function MorningBriefPage() {
     const now = new Date();
     const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
+    // Stale brief detection: warn if briefs are older than 26 hours
+    const isBriefStale = (() => {
+        if (!generatedAt) return false;
+        const genTime = new Date(generatedAt).getTime();
+        const staleThreshold = 26 * 60 * 60 * 1000; // 26 hours in ms
+        return Date.now() - genTime > staleThreshold;
+    })();
+
     return (
         <div className="min-h-screen bg-[#0A0A0A] text-[#FAFAFA] flex flex-col items-center">
             {/* Header */}
@@ -123,6 +131,12 @@ export default function MorningBriefPage() {
                         <p className="text-[#7C7C7C] font-mono text-[10px] uppercase tracking-wider mt-1">
                             Last scan: {new Date(generatedAt).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, month: "short", day: "numeric" })}
                         </p>
+                    )}
+                    {isBriefStale && briefsLoaded && (
+                        <div className="mt-3 flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-lg">
+                            <span className="text-sm">⚠️</span>
+                            <span className="text-[11px] font-mono">Data may be stale — last scan was over 24 hours ago. The next daily cycle will refresh automatically.</span>
+                        </div>
                     )}
                 </div>
 

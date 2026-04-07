@@ -42,19 +42,29 @@ export async function GET(req: Request) {
 
         console.log(`[Cron] Successfully scanned and locked in ${finalListings.length} properties for ${record.date}.`);
 
-        // After scraping, generate pre-computed morning briefs for all clients
+        // After scraping, trigger pre-computed morning briefs for all clients
+        // FIRE-AND-FORGET: Don't await — brief generation runs independently with its own 300s timeout.
+        // Awaiting it here risks the cron timing out (scrape + brief gen could exceed 300s combined).
         try {
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://opulentus.vercel.app";
-            console.log("[Cron] Triggering morning brief generation for all clients...");
-            const briefRes = await fetch(`${appUrl}/api/generate-client-briefs`, {
+            // Smart URL resolution: prefer explicit env var, but never use localhost in production
+            const rawUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+            const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
+            const appUrl = (rawUrl && !rawUrl.includes("localhost")) ? rawUrl : (vercelUrl || "https://opulentus.vercel.app");
+            const cronSecret = process.env.CRON_SECRET || "";
+            console.log("[Cron] Triggering morning brief generation (fire-and-forget)...");
+            fetch(`${appUrl}/api/generate-client-briefs`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(cronSecret ? { "x-cron-secret": cronSecret } : {}),
+                },
+            }).then(res => {
+                console.log(`[Cron] Brief generation responded with status: ${res.status}`);
+            }).catch(err => {
+                console.error("[Cron] Brief generation trigger failed (non-fatal):", err.message);
             });
-            const briefData = await briefRes.json();
-            console.log(`[Cron] Brief generation result:`, briefData);
         } catch (briefErr: any) {
-            // Don't fail the cron if brief generation fails
-            console.error("[Cron] Brief generation failed (non-fatal):", briefErr.message);
+            console.error("[Cron] Brief generation trigger failed (non-fatal):", briefErr.message);
         }
 
         return NextResponse.json({
