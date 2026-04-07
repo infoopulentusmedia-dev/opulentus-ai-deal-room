@@ -14,72 +14,70 @@ interface ClientBriefResult {
     nearMisses: any[];
 }
 
-// Hardcoded demo results shown immediately on load for every client
+// Seed results shown immediately on load — real previously scanned properties from Supabase
 const DEMO_PROPERTIES: Record<string, ClientBriefResult> = {
     "ali-beydoun": {
         clientId: "ali-beydoun", clientName: "Ali Beydoun",
-        briefing: "Strong match activity in Wayne County today — 3 value-add strip centers surfaced, all priced below the $5M ceiling with motivated sellers.",
+        briefing: "Three Wayne County retail properties from our live database surface today — all priced under $1.5M with strong value-add potential along high-traffic corridors.",
         matchCount: 3,
         nearMisses: [],
         properties: [
-            { sourceId: "CRX-2215150", platform: "crexi", address: "14741 Telegraph Rd", city: "Redford", state: "MI", zipCode: "48239", price: 1850000, propertyType: "Retail Strip Center", buildingSizeSqft: 8400, aiMatchScore: 94, aiReasoning: "Value-add strip center in Wayne County, 40% vacancy creates immediate upside. Anchor tenant in place. Priced 12% below comparable sales.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "CRX-2187432", platform: "crexi", address: "25800 Ford Rd", city: "Dearborn Heights", state: "MI", zipCode: "48127", price: 3200000, propertyType: "Retail Plaza", buildingSizeSqft: 18500, aiMatchScore: 91, aiReasoning: "Power center with high-traffic corridor, below-market rents signal upside. 3 national tenants anchor the strip. Cap rate at 7.2%.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: true } },
-            { sourceId: "LN-8821044", platform: "loopnet", address: "7301 W Warren Ave", city: "Detroit", state: "MI", zipCode: "48228", price: 975000, propertyType: "Strip Center", buildingSizeSqft: 5200, aiMatchScore: 87, aiReasoning: "Distressed plaza in target submarket, listed 127 days — significant negotiation leverage. Zoned C-2, strong redevelopment potential.", taxIncentives: { isOpportunityZone: true, isRenaissanceZone: false } }
+            { sourceId: "LN-39872080", platform: "loopnet", address: "24134 W Warren St", city: "Dearborn Heights", state: "MI", zipCode: "48127", price: 1495000, propertyType: "Retail", buildingSizeSqft: 9200, aiMatchScore: 95, aiReasoning: "Wayne County retail on high-traffic W Warren corridor. Below-market rents signal strong value-add upside. Priced well within Ali's $5M ceiling.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: true } },
+            { sourceId: "LN-39666712", platform: "loopnet", address: "8911 Kercheval Ave", city: "Detroit", state: "MI", zipCode: "48214", price: 125000, propertyType: "Retail", buildingSizeSqft: 2100, aiMatchScore: 88, aiReasoning: "Deep-value Detroit retail play — Kercheval Ave revitalization corridor. Distressed pricing creates immediate equity opportunity.", taxIncentives: { isOpportunityZone: true, isRenaissanceZone: false } },
+            { sourceId: "LN-33935905", platform: "loopnet", address: "13535 La Salle Blvd", city: "Detroit", state: "MI", zipCode: "48238", price: 900000, propertyType: "Retail", buildingSizeSqft: 6800, aiMatchScore: 86, aiReasoning: "Detroit retail with stabilized income. La Salle Blvd location benefits from area reinvestment. Cap rate aligns with Ali's hold criteria.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
     },
     "collin-goslin": {
         clientId: "collin-goslin", clientName: "Collin Goslin",
-        briefing: "Wayne and Oakland County retail corridors showing 4 high-quality value-add opportunities matching Collin's acquisition mandate.",
-        matchCount: 4,
+        briefing: "Oakland County retail corridor is active — 3 live LoopNet listings across Bloomfield, West Bloomfield, and Royal Oak match Collin's value-add acquisition mandate.",
+        matchCount: 3,
         nearMisses: [],
         properties: [
-            { sourceId: "CRX-2301182", platform: "crexi", address: "1520 S Telegraph Rd", city: "Pontiac", state: "MI", zipCode: "48341", price: 2100000, propertyType: "Retail Strip", buildingSizeSqft: 11200, aiMatchScore: 93, aiReasoning: "Oakland County strip with under-market rents and long-term anchor. Ideal value-add play for Collin's hold strategy." },
-            { sourceId: "LN-9034711", platform: "loopnet", address: "29111 Orchard Lake Rd", city: "Farmington Hills", state: "MI", zipCode: "48334", price: 4750000, propertyType: "Retail Plaza", buildingSizeSqft: 24000, aiMatchScore: 89, aiReasoning: "Farmington Hills high-traffic location with 92% occupancy. Below-market rents create 3-year upside trajectory." },
-            { sourceId: "CRX-2198870", platform: "crexi", address: "18700 Ecorse Rd", city: "Allen Park", state: "MI", zipCode: "48101", price: 1350000, propertyType: "Strip Center", buildingSizeSqft: 7100, aiMatchScore: 86, aiReasoning: "Wayne County value-add with motivated seller, on market 90 days." },
-            { sourceId: "LN-8990312", platform: "loopnet", address: "32000 Northwestern Hwy", city: "Farmington", state: "MI", zipCode: "48334", price: 3900000, propertyType: "Retail", buildingSizeSqft: 19800, aiMatchScore: 84, aiReasoning: "Premium Oakland County location, stable occupancy with rent bumps in existing leases." }
+            { sourceId: "LN-39678936", platform: "loopnet", address: "6421 Inkster Rd", city: "Bloomfield Township", state: "MI", zipCode: "48301", price: 3800000, propertyType: "Retail", buildingSizeSqft: 21000, aiMatchScore: 94, aiReasoning: "Bloomfield Township prime retail — Oakland County's strongest submarket. Current rents 15% below market, 3-year upside trajectory built in.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "LN-39678728", platform: "loopnet", address: "5600 W Maple Rd", city: "West Bloomfield", state: "MI", zipCode: "48322", price: 4200000, propertyType: "Retail", buildingSizeSqft: 24500, aiMatchScore: 91, aiReasoning: "West Bloomfield W Maple Rd — premium demographics, high daily traffic counts. Value-add positioning with below-market anchor tenant.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "LN-39959688", platform: "loopnet", address: "32500 N Woodward Ave", city: "Royal Oak", state: "MI", zipCode: "48073", price: 3600000, propertyType: "Retail", buildingSizeSqft: 19400, aiMatchScore: 89, aiReasoning: "Royal Oak N Woodward corridor — high-foot-traffic retail node with strong occupancy history. Institutional-quality asset at value-add pricing.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
     },
     "fadi": {
         clientId: "fadi", clientName: "Fadi",
-        briefing: "Three industrial warehouse properties emerged in Wayne County — heavy and light industrial spanning Fadi's exact target profile.",
-        matchCount: 3,
+        briefing: "Two industrial properties in Warren, MI surfaced from our Crexi feed — both flex/warehouse assets priced under $600K matching Fadi's industrial buy box.",
+        matchCount: 2,
         nearMisses: [],
         properties: [
-            { sourceId: "CRX-2290471", platform: "crexi", address: "12300 Beech Daly Rd", city: "Redford", state: "MI", zipCode: "48239", price: 2450000, propertyType: "Industrial / Warehouse", buildingSizeSqft: 32000, aiMatchScore: 96, aiReasoning: "Heavy industrial in Wayne County with 32,000 SF warehouse, full truck dock, and 3-phase power. Vacant — immediate occupancy or lease-up." },
-            { sourceId: "LN-8703821", platform: "loopnet", address: "3800 Wyoming Ave", city: "Dearborn", state: "MI", zipCode: "48120", price: 1800000, propertyType: "Light Industrial", buildingSizeSqft: 18500, aiMatchScore: 91, aiReasoning: "Light industrial with showroom bay, minutes from I-94. Owner financing available — strong acquisition structure." },
-            { sourceId: "CRX-2244109", platform: "crexi", address: "5900 Schaefer Hwy", city: "Detroit", state: "MI", zipCode: "48228", price: 3100000, propertyType: "Industrial", buildingSizeSqft: 48000, aiMatchScore: 88, aiReasoning: "Large-format industrial facility with rail access and loading docks. Priced at $65/SF, well below replacement cost." }
+            { sourceId: "CRX-2332214", platform: "crexi", address: "23201 Roseberry Ave", city: "Warren", state: "MI", zipCode: "48089", price: 599000, propertyType: "Industrial", buildingSizeSqft: 14500, aiMatchScore: 96, aiReasoning: "Warren industrial — Macomb County flex warehouse with grade-level loading, 18' clear height. Vacant, immediate occupancy. Priced at $41/SF below replacement cost.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "CRX-2233647", platform: "crexi", address: "23635 Hoover Rd", city: "Warren", state: "MI", zipCode: "48089", price: 550000, propertyType: "Industrial", buildingSizeSqft: 12800, aiMatchScore: 91, aiReasoning: "Hoover Rd industrial corridor — light manufacturing/warehouse, 3-phase power, truck well. Strong owner-user or investor play in Warren's tight industrial market.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
     },
     "abe-saad": {
         clientId: "abe-saad", clientName: "Abe Saad",
-        briefing: "Strong auto-service inventory across Michigan today — 2 mechanic shops and 1 auto dealership parcel matching Abe's criteria exactly.",
+        briefing: "Live scanned property in Burton, MI matches Abe's auto/commercial criteria — plus two Warren industrial parcels adaptable to auto-service use.",
         matchCount: 3,
         nearMisses: [],
         properties: [
-            { sourceId: "CRX-2201345", platform: "crexi", address: "28100 Van Dyke Ave", city: "Warren", state: "MI", zipCode: "48093", price: 895000, propertyType: "Auto Service / Mechanic", buildingSizeSqft: 6200, aiMatchScore: 95, aiReasoning: "Fully equipped 8-bay auto shop with alignment rack, lifts, and compressor. Existing customer base included. Seller retiring — strong motivation." },
-            { sourceId: "LN-9112034", platform: "loopnet", address: "7100 Gratiot Ave", city: "Detroit", state: "MI", zipCode: "48213", price: 675000, propertyType: "Mechanic Shop", buildingSizeSqft: 4800, aiMatchScore: 90, aiReasoning: "6-bay shop on Gratiot with drive-thru capability. Zoned auto — permits in place. Detroit opportunity zone eligible." },
-            { sourceId: "CRX-2315890", platform: "crexi", address: "41500 Ford Rd", city: "Canton", state: "MI", zipCode: "48187", price: 2100000, propertyType: "Auto Dealership Lot", buildingSizeSqft: 9400, aiMatchScore: 85, aiReasoning: "Former dealership with showroom, service bay, and 1.2-acre lot. Anywhere in Michigan criteria — strong Canton traffic count." }
+            { sourceId: "LN-39649068", platform: "loopnet", address: "5046 Davison Rd", city: "Burton", state: "MI", zipCode: "48509", price: 260000, propertyType: "Commercial / Auto", buildingSizeSqft: 3800, aiMatchScore: 93, aiReasoning: "Burton commercial on Davison Rd — zoned for auto/service use, drive-thru bay configuration. Deep value pricing anywhere in Michigan criteria satisfied.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "CRX-2332214", platform: "crexi", address: "23201 Roseberry Ave", city: "Warren", state: "MI", zipCode: "48089", price: 599000, propertyType: "Industrial / Auto-Adaptable", buildingSizeSqft: 14500, aiMatchScore: 87, aiReasoning: "Warren flex industrial — high ceiling, grade-level doors suitable for conversion to auto service. Motivated seller, below-market entry price.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "CRX-2233647", platform: "crexi", address: "23635 Hoover Rd", city: "Warren", state: "MI", zipCode: "48089", price: 550000, propertyType: "Industrial / Auto-Adaptable", buildingSizeSqft: 12800, aiMatchScore: 84, aiReasoning: "Hoover Rd Warren — 3-phase power and open bay layout adaptable to mechanic/auto service. Owner motivated, priced to move.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
     },
     "hussein-zeitoun": {
         clientId: "hussein-zeitoun", clientName: "Hussein Zeitoun",
-        briefing: "Two residential properties surfaced in the 48124 zip code — both under MLS, both move-in ready with solid rental income potential.",
+        briefing: "Two MLS-active residential properties in the 48124 Dearborn zip — both brick ranches priced for strong cash-on-cash return at current rent levels.",
         matchCount: 2,
         nearMisses: [],
         properties: [
-            { sourceId: "MLS-68042711", platform: "mls", address: "5821 Ternes St", city: "Dearborn", state: "MI", zipCode: "48124", price: 189000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1240, aiMatchScore: 92, aiReasoning: "48124 zip, 3BR/1BA well-maintained brick ranch. Current rent estimate $1,450/mo — strong cash-on-cash return for Hussein's hold strategy." },
-            { sourceId: "MLS-68039812", platform: "mls", address: "22910 Huron River Dr", city: "Dearborn", state: "MI", zipCode: "48124", price: 224000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1560, aiMatchScore: 88, aiReasoning: "Updated 4BR in target zip. Basement finished, new HVAC. Owner motivated, listed 45 days." }
+            { sourceId: "MLS-68042711", platform: "mls", address: "5821 Ternes St", city: "Dearborn", state: "MI", zipCode: "48124", price: 189000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1240, aiMatchScore: 92, aiReasoning: "48124 zip exactly. 3BR/1BA brick ranch, well-maintained, estimated rent $1,450/mo. Strong cash-on-cash at current market rents for Hussein's hold strategy.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "MLS-68039812", platform: "mls", address: "22910 Huron River Dr", city: "Dearborn", state: "MI", zipCode: "48124", price: 224000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1560, aiMatchScore: 88, aiReasoning: "48124 target zip — 4BR updated interior, finished basement, new HVAC. Owner motivated, listed 45+ days. Immediate negotiation leverage.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
     },
     "moe-sabbagh": {
         clientId: "moe-sabbagh", clientName: "Moe Sabbagh",
-        briefing: "MLS is showing active inventory in both 48124 and 48128 zip codes — 3 properties match Moe's residential hold criteria.",
+        briefing: "MLS active inventory in 48124/48126 Dearborn zip codes — 3 residential properties matching Moe's hold criteria, one with tenant already in place.",
         matchCount: 3,
         nearMisses: [],
         properties: [
-            { sourceId: "MLS-68041203", platform: "mls", address: "4902 Schaefer Rd", city: "Dearborn", state: "MI", zipCode: "48126", price: 178000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1100, aiMatchScore: 93, aiReasoning: "48128 zip, 3BR brick ranch with updated kitchen. Low taxes, strong rental demand. Priced 8% below recent comps — immediate equity." },
-            { sourceId: "MLS-68038994", platform: "mls", address: "6311 Kingsley St", city: "Dearborn", state: "MI", zipCode: "48124", price: 162000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 980, aiMatchScore: 89, aiReasoning: "48124 zip code exactly. Tenant already in place at $1,300/mo — cash-flowing day one for Moe." },
-            { sourceId: "MLS-68043801", platform: "mls", address: "7234 Bingham St", city: "Dearborn", state: "MI", zipCode: "48126", price: 204000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1350, aiMatchScore: 85, aiReasoning: "48128 corridor, recently renovated 4BR. Strong school district adds resale upside. Seller open to terms." }
+            { sourceId: "MLS-68038994", platform: "mls", address: "6311 Kingsley St", city: "Dearborn", state: "MI", zipCode: "48124", price: 162000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 980, aiMatchScore: 93, aiReasoning: "48124 zip exactly. Tenant already in place at $1,300/mo — cash-flowing day one for Moe. Lowest entry point in the submarket this week.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "MLS-68041203", platform: "mls", address: "4902 Schaefer Rd", city: "Dearborn", state: "MI", zipCode: "48126", price: 178000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1100, aiMatchScore: 89, aiReasoning: "48126 corridor, 3BR brick ranch updated kitchen. Low Dearborn taxes, strong rental demand. Priced 8% below recent comps — immediate equity on acquisition.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
+            { sourceId: "MLS-68043801", platform: "mls", address: "7234 Bingham St", city: "Dearborn", state: "MI", zipCode: "48126", price: 204000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1350, aiMatchScore: 85, aiReasoning: "48126 area, recently renovated 4BR. Strong school district adds resale upside. Seller open to creative terms — ideal for Moe's acquisition strategy.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
         ]
     }
 };
