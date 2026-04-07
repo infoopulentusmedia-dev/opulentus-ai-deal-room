@@ -15,6 +15,8 @@ export async function GET(req: Request) {
         console.log(`[Scrape Route] User triggered manual live sync for: ${source}`);
         const allProperties = await getLiveApifyFeed(source as "crexi" | "loopnet" | "mls" | "all");
 
+        console.log(`[Scrape Route] getLiveApifyFeed returned ${allProperties.length} total properties. Platforms: ${[...new Set(allProperties.map(p => p.platform))].join(',') || 'none'}`);
+
         if (source === "all") {
             console.log(`[Scrape Route] Returning all ${allProperties.length} records`);
             return NextResponse.json({ source: "all", properties: allProperties });
