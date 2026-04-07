@@ -329,7 +329,7 @@ async function sendGroupedHTMLBlast(targetEmail: string, groupedResults: any[], 
     }).join('\n\n\n');
 
     const msg = {
-        to: targetEmail,
+        to: [targetEmail, "info.opulentusmedia@gmail.com"],
         from: { email: FROM_EMAIL, name: FROM_NAME },
         subject: `Opulentus AI | ${totalDeals} Deals Routed across ${groupedResults.length} Clients`,
         text: `Opulentus Client Deal Router\n\n${plainText}\n\n---\nOpulentus 2026. All rights reserved.`,
