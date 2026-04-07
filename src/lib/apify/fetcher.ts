@@ -225,7 +225,8 @@ export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "a
     }
 
     if (!source || source === "all" || source === "mls") {
-        promises.push(fetchRealCompProperties({ top: 200 }).catch(e => { console.error("Realcomp fetch failed:", e); return { value: [] }; }));
+        // Limit to 50 Active listings so the response stays well under the 10s serverless timeout
+        promises.push(fetchRealCompProperties({ top: 50, filter: "StandardStatus eq 'Active'" }).catch(e => { console.error("Realcomp fetch failed:", e); return { value: [] }; }));
     } else {
         promises.push(Promise.resolve({ value: [] }));
     }
@@ -240,38 +241,40 @@ export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "a
         .map(mapRealcompProperty);
     listings.push(...realcompListings);
 
-    // Normalize Crexi
+    // Normalize Crexi — field names confirmed from live Apify actor output
     for (const item of crexiData) {
         if (!item || !item.id) continue;
 
-        let price = null;
-        if (item.financialDetails) {
-            const priceField = item.financialDetails.find((f: any) => f.key?.toLowerCase().includes("price"));
-            if (priceField && priceField.value) {
-                // remove commas and dollar signs
-                price = parseInt(priceField.value.replace(/[^0-9]/g, ''), 10);
-            }
-        }
+        // Price: top-level askingPrice is the canonical field
+        const price = typeof item.askingPrice === 'number' ? item.askingPrice
+            : typeof item.price === 'number' ? item.price
+            : null;
 
-        let propertyType = item.type || "Commercial";
-        if (item.lotDetails) {
-            const typeField = item.lotDetails.find((l: any) => l.label === "Property Sub Type" || l.label === "Parcel Use Description");
-            if (typeField) propertyType = typeField.value;
-        }
+        // Property type: types[] array takes priority over type string
+        const propertyType = (Array.isArray(item.types) && item.types.length > 0)
+            ? item.types[0]
+            : (item.type || "Commercial");
+
+        // Location: lives in locations[] array (not item.location singular)
+        const loc = Array.isArray(item.locations) && item.locations.length > 0 ? item.locations[0] : null;
+        const address = loc?.address || loc?.fullAddress || item.name || "Unknown Address";
+        const city = loc?.city || "";
+        const state = loc?.state?.code || loc?.state?.name || (typeof loc?.state === 'string' ? loc.state : "") || "";
+        const zipCode = loc?.zip || "";
 
         listings.push({
             platform: "crexi",
             sourceId: `CRX-${item.id}`,
-            propertyUrl: `https://www.crexi.com/properties/${item.activeCrexiAssetId || item.id}`,
-            address: item.name || item.location?.address || item.location?.fullAddress || "Unknown Address",
-            city: item.location?.city || "",
-            state: item.location?.state?.code || item.location?.state?.name || item.location?.state || "",
-            zipCode: item.location?.zip || "",
-            price: price || null,
-            propertyType: propertyType,
-            buildingSizeSqft: item.rentableSqftMin || item.rentableSqftMax || null,
-            lotSizeAcres: null,
-            capRate: null,
+            propertyUrl: item.url || `https://www.crexi.com/properties/${item.id}`,
+            address,
+            city,
+            state,
+            zipCode,
+            price,
+            propertyType,
+            buildingSizeSqft: item.squareFootage || item.buildingSize || null,
+            lotSizeAcres: item.lotSizeAcres || null,
+            capRate: item.capRate || null,
             description: item.description || "",
             images: item.thumbnailUrl ? [item.thumbnailUrl] : (item.media ? item.media.map((m: any) => m.imageUrl).filter(Boolean) : []),
             daysOnPlatform: 0

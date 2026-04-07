@@ -50,7 +50,7 @@ export async function fetchRealCompProperties({ top = 5, skip = 0, filter = '' }
     console.log('[RealComp] Fetching:', propertyUrl.toString());
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
 
     let response;
     try {
