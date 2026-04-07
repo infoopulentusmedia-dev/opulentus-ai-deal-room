@@ -14,7 +14,10 @@
       "maxDuration": 60
     },
     "src/app/api/cron/daily-scrape/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
+    },
+    "src/app/api/generate-client-briefs/route.ts": {
+      "maxDuration": 300
     }
   }
 }

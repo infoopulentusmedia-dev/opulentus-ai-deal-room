@@ -1,51 +1,55 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const MODEL = 'claude-sonnet-4-6';
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+const MODEL = 'gemini-2.0-flash';
 
 const cleanJson = (text: string): string =>
     text.replace(/```json\n?|\n?```/g, '').trim();
 
 export async function generateOrchestratorPlan(prompt: string) {
     try {
-        const message = await client.messages.create({
+        const response = await ai.models.generateContent({
             model: MODEL,
-            max_tokens: 4096,
-            system: `You are Opulentus, a Real Estate AI dealing exclusively in exact deals.
+            contents: prompt,
+            config: {
+                maxOutputTokens: 4096,
+                systemInstruction: `You are Opulentus, a Real Estate AI dealing exclusively in exact deals.
 Your goal is to parse user intents, query the RealComp database, and formulate a highly structured response plan.
 Respond in valid JSON only matching the established assistant-command schema.`,
-            messages: [{ role: 'user', content: prompt }],
+            },
         });
 
-        const text = (message.content[0] as { type: string; text: string }).text;
+        const text = response.text;
         if (text) return JSON.parse(cleanJson(text));
 
-        throw new Error('Empty response from Claude');
+        throw new Error('Empty response from Gemini');
     } catch (error) {
-        console.error('Claude OrchestratorPlan Error:', error);
+        console.error('Gemini OrchestratorPlan Error:', error);
         throw error;
     }
 }
 
 /**
- * General-purpose Claude analysis for Deal Room tabs.
+ * General-purpose Gemini analysis for Deal Room tabs.
  * Accepts a system instruction, user prompt, returns parsed JSON.
  */
 export async function generateAnalysis(systemInstruction: string, prompt: string): Promise<any> {
     try {
-        const message = await client.messages.create({
+        const response = await ai.models.generateContent({
             model: MODEL,
-            max_tokens: 4096,
-            system: systemInstruction,
-            messages: [{ role: 'user', content: prompt }],
+            contents: prompt,
+            config: {
+                maxOutputTokens: 4096,
+                systemInstruction,
+            },
         });
 
-        const text = (message.content[0] as { type: string; text: string }).text;
+        const text = response.text;
         if (text) return JSON.parse(cleanJson(text));
 
-        throw new Error('Empty response from Claude analysis');
+        throw new Error('Empty response from Gemini analysis');
     } catch (error) {
-        console.error('Claude Analysis Error:', error);
+        console.error('Gemini Analysis Error:', error);
         throw error;
     }
 }
@@ -55,16 +59,18 @@ export async function generateAnalysis(systemInstruction: string, prompt: string
  */
 export async function generateNarrative(systemInstruction: string, prompt: string): Promise<string> {
     try {
-        const message = await client.messages.create({
+        const response = await ai.models.generateContent({
             model: MODEL,
-            max_tokens: 2048,
-            system: systemInstruction,
-            messages: [{ role: 'user', content: prompt }],
+            contents: prompt,
+            config: {
+                maxOutputTokens: 2048,
+                systemInstruction,
+            },
         });
 
-        return (message.content[0] as { type: string; text: string }).text || 'No analysis generated.';
+        return response.text || 'No analysis generated.';
     } catch (error) {
-        console.error('Claude Narrative Error:', error);
+        console.error('Gemini Narrative Error:', error);
         throw error;
     }
 }

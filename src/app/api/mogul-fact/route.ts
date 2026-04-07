@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 const SYSTEM_INSTRUCTION = `You are a historian of commercial real estate. Your sole job is to provide exactly ONE fascinating, little-known fact about an iconic real estate mogul from history (e.g., John Jacob Astor, Arthur Zeckendorf, Trammell Crow, Gerald Hines, William Zeckendorf, Sam Zell, etc.) and a core business principle they used to build their empire.
 
@@ -17,14 +17,16 @@ export async function GET() {
     try {
         const prompt = "Give me a random, unique historical fact about a real estate mogul and their business principle. Ensure it is entirely different from the last one you generated.";
 
-        const message = await client.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 256,
-            system: SYSTEM_INSTRUCTION,
-            messages: [{ role: 'user', content: prompt }],
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt,
+            config: {
+                maxOutputTokens: 256,
+                systemInstruction: SYSTEM_INSTRUCTION,
+            },
         });
 
-        const text = ((message.content[0] as { type: string; text: string }).text || "").trim()
+        const text = (response.text || "").trim()
             || "John Jacob Astor believed that buying land in the path of development was the ultimate wealth generator. He purchased Manhattan real estate before the grid expanded, defining the strategy of long-term land banking.";
 
         const cleanText = text.replace(/[*_#]/g, '');

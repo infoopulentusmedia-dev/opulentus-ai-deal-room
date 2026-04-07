@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loadAllClients, BuyBoxCriteria } from "@/lib/buybox";
-import MogulFactLoader from "@/components/MogulFactLoader";
 
 interface ClientBriefResult {
     clientId: string;
@@ -12,122 +11,44 @@ interface ClientBriefResult {
     matchCount: number;
     properties: any[];
     nearMisses: any[];
+    generatedAt?: string;
 }
-
-// Seed results shown immediately on load — real previously scanned properties from Supabase
-const DEMO_PROPERTIES: Record<string, ClientBriefResult> = {
-    "ali-beydoun": {
-        clientId: "ali-beydoun", clientName: "Ali Beydoun",
-        briefing: "Three Wayne County retail properties from our live database surface today — all priced under $1.5M with strong value-add potential along high-traffic corridors.",
-        matchCount: 3,
-        nearMisses: [],
-        properties: [
-            { sourceId: "LN-39872080", platform: "loopnet", address: "24134 W Warren St", city: "Dearborn Heights", state: "MI", zipCode: "48127", price: 1495000, propertyType: "Retail", buildingSizeSqft: 9200, aiMatchScore: 95, aiReasoning: "Wayne County retail on high-traffic W Warren corridor. Below-market rents signal strong value-add upside. Priced well within Ali's $5M ceiling.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: true } },
-            { sourceId: "LN-39666712", platform: "loopnet", address: "8911 Kercheval Ave", city: "Detroit", state: "MI", zipCode: "48214", price: 125000, propertyType: "Retail", buildingSizeSqft: 2100, aiMatchScore: 88, aiReasoning: "Deep-value Detroit retail play — Kercheval Ave revitalization corridor. Distressed pricing creates immediate equity opportunity.", taxIncentives: { isOpportunityZone: true, isRenaissanceZone: false } },
-            { sourceId: "LN-33935905", platform: "loopnet", address: "13535 La Salle Blvd", city: "Detroit", state: "MI", zipCode: "48238", price: 900000, propertyType: "Retail", buildingSizeSqft: 6800, aiMatchScore: 86, aiReasoning: "Detroit retail with stabilized income. La Salle Blvd location benefits from area reinvestment. Cap rate aligns with Ali's hold criteria.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    },
-    "collin-goslin": {
-        clientId: "collin-goslin", clientName: "Collin Goslin",
-        briefing: "Oakland County retail corridor is active — 3 live LoopNet listings across Bloomfield, West Bloomfield, and Royal Oak match Collin's value-add acquisition mandate.",
-        matchCount: 3,
-        nearMisses: [],
-        properties: [
-            { sourceId: "LN-39678936", platform: "loopnet", address: "6421 Inkster Rd", city: "Bloomfield Township", state: "MI", zipCode: "48301", price: 3800000, propertyType: "Retail", buildingSizeSqft: 21000, aiMatchScore: 94, aiReasoning: "Bloomfield Township prime retail — Oakland County's strongest submarket. Current rents 15% below market, 3-year upside trajectory built in.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "LN-39678728", platform: "loopnet", address: "5600 W Maple Rd", city: "West Bloomfield", state: "MI", zipCode: "48322", price: 4200000, propertyType: "Retail", buildingSizeSqft: 24500, aiMatchScore: 91, aiReasoning: "West Bloomfield W Maple Rd — premium demographics, high daily traffic counts. Value-add positioning with below-market anchor tenant.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "LN-39959688", platform: "loopnet", address: "32500 N Woodward Ave", city: "Royal Oak", state: "MI", zipCode: "48073", price: 3600000, propertyType: "Retail", buildingSizeSqft: 19400, aiMatchScore: 89, aiReasoning: "Royal Oak N Woodward corridor — high-foot-traffic retail node with strong occupancy history. Institutional-quality asset at value-add pricing.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    },
-    "fadi": {
-        clientId: "fadi", clientName: "Fadi",
-        briefing: "Two industrial properties in Warren, MI surfaced from our Crexi feed — both flex/warehouse assets priced under $600K matching Fadi's industrial buy box.",
-        matchCount: 2,
-        nearMisses: [],
-        properties: [
-            { sourceId: "CRX-2332214", platform: "crexi", address: "23201 Roseberry Ave", city: "Warren", state: "MI", zipCode: "48089", price: 599000, propertyType: "Industrial", buildingSizeSqft: 14500, aiMatchScore: 96, aiReasoning: "Warren industrial — Macomb County flex warehouse with grade-level loading, 18' clear height. Vacant, immediate occupancy. Priced at $41/SF below replacement cost.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "CRX-2233647", platform: "crexi", address: "23635 Hoover Rd", city: "Warren", state: "MI", zipCode: "48089", price: 550000, propertyType: "Industrial", buildingSizeSqft: 12800, aiMatchScore: 91, aiReasoning: "Hoover Rd industrial corridor — light manufacturing/warehouse, 3-phase power, truck well. Strong owner-user or investor play in Warren's tight industrial market.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    },
-    "abe-saad": {
-        clientId: "abe-saad", clientName: "Abe Saad",
-        briefing: "Live scanned property in Burton, MI matches Abe's auto/commercial criteria — plus two Warren industrial parcels adaptable to auto-service use.",
-        matchCount: 3,
-        nearMisses: [],
-        properties: [
-            { sourceId: "LN-39649068", platform: "loopnet", address: "5046 Davison Rd", city: "Burton", state: "MI", zipCode: "48509", price: 260000, propertyType: "Commercial / Auto", buildingSizeSqft: 3800, aiMatchScore: 93, aiReasoning: "Burton commercial on Davison Rd — zoned for auto/service use, drive-thru bay configuration. Deep value pricing anywhere in Michigan criteria satisfied.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "CRX-2332214", platform: "crexi", address: "23201 Roseberry Ave", city: "Warren", state: "MI", zipCode: "48089", price: 599000, propertyType: "Industrial / Auto-Adaptable", buildingSizeSqft: 14500, aiMatchScore: 87, aiReasoning: "Warren flex industrial — high ceiling, grade-level doors suitable for conversion to auto service. Motivated seller, below-market entry price.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "CRX-2233647", platform: "crexi", address: "23635 Hoover Rd", city: "Warren", state: "MI", zipCode: "48089", price: 550000, propertyType: "Industrial / Auto-Adaptable", buildingSizeSqft: 12800, aiMatchScore: 84, aiReasoning: "Hoover Rd Warren — 3-phase power and open bay layout adaptable to mechanic/auto service. Owner motivated, priced to move.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    },
-    "hussein-zeitoun": {
-        clientId: "hussein-zeitoun", clientName: "Hussein Zeitoun",
-        briefing: "Two MLS-active residential properties in the 48124 Dearborn zip — both brick ranches priced for strong cash-on-cash return at current rent levels.",
-        matchCount: 2,
-        nearMisses: [],
-        properties: [
-            { sourceId: "MLS-68042711", platform: "mls", address: "5821 Ternes St", city: "Dearborn", state: "MI", zipCode: "48124", price: 189000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1240, aiMatchScore: 92, aiReasoning: "48124 zip exactly. 3BR/1BA brick ranch, well-maintained, estimated rent $1,450/mo. Strong cash-on-cash at current market rents for Hussein's hold strategy.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "MLS-68039812", platform: "mls", address: "22910 Huron River Dr", city: "Dearborn", state: "MI", zipCode: "48124", price: 224000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1560, aiMatchScore: 88, aiReasoning: "48124 target zip — 4BR updated interior, finished basement, new HVAC. Owner motivated, listed 45+ days. Immediate negotiation leverage.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    },
-    "moe-sabbagh": {
-        clientId: "moe-sabbagh", clientName: "Moe Sabbagh",
-        briefing: "MLS active inventory in 48124/48126 Dearborn zip codes — 3 residential properties matching Moe's hold criteria, one with tenant already in place.",
-        matchCount: 3,
-        nearMisses: [],
-        properties: [
-            { sourceId: "MLS-68038994", platform: "mls", address: "6311 Kingsley St", city: "Dearborn", state: "MI", zipCode: "48124", price: 162000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 980, aiMatchScore: 93, aiReasoning: "48124 zip exactly. Tenant already in place at $1,300/mo — cash-flowing day one for Moe. Lowest entry point in the submarket this week.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "MLS-68041203", platform: "mls", address: "4902 Schaefer Rd", city: "Dearborn", state: "MI", zipCode: "48126", price: 178000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1100, aiMatchScore: 89, aiReasoning: "48126 corridor, 3BR brick ranch updated kitchen. Low Dearborn taxes, strong rental demand. Priced 8% below recent comps — immediate equity on acquisition.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "MLS-68043801", platform: "mls", address: "7234 Bingham St", city: "Dearborn", state: "MI", zipCode: "48126", price: 204000, propertyType: "SingleFamilyResidence", buildingSizeSqft: 1350, aiMatchScore: 85, aiReasoning: "48126 area, recently renovated 4BR. Strong school district adds resale upside. Seller open to creative terms — ideal for Moe's acquisition strategy.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    },
-    "nick-from-kw": {
-        clientId: "nick-from-kw", clientName: "Nick from KW",
-        briefing: "Three office properties surfaced near Nick's downriver target — Dearborn Michigan Ave corridor and Detroit metro office inventory, all from our live database.",
-        matchCount: 3,
-        nearMisses: [],
-        properties: [
-            { sourceId: "CRX-1793495", platform: "crexi", address: "23954 Michigan Ave", city: "Dearborn", state: "MI", zipCode: "48124", price: 1650000, propertyType: "Office", buildingSizeSqft: 8200, aiMatchScore: 94, aiReasoning: "Michigan Ave office directly adjacent to Allen Park border — prime downriver corridor. $1.65M asking price, strong office tenant demand in this submarket.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } },
-            { sourceId: "LN-40020080", platform: "loopnet", address: "1686-1752 Howard St", city: "Detroit", state: "MI", zipCode: "48216", price: 5283000, propertyType: "Office", buildingSizeSqft: 35219, aiMatchScore: 88, aiReasoning: "Large-format Detroit office with 35,219 SF — institutional quality near Mexicantown/Corktown. Value-add repositioning opportunity for office-to-flex conversion.", taxIncentives: { isOpportunityZone: true, isRenaissanceZone: false } },
-            { sourceId: "LN-39661719", platform: "loopnet", address: "26026-26038 Woodward Ave", city: "Royal Oak", state: "MI", zipCode: "48067", price: 1500000, propertyType: "Office", buildingSizeSqft: 5049, aiMatchScore: 85, aiReasoning: "Royal Oak Woodward Ave office — premium location with high foot traffic. $1.5M entry point, strong for professional office tenants in Oakland County.", taxIncentives: { isOpportunityZone: false, isRenaissanceZone: false } }
-        ]
-    }
-};
 
 export default function MorningBriefPage() {
     const router = useRouter();
     const [clients, setClients] = useState<BuyBoxCriteria[]>([]);
     const [results, setResults] = useState<Record<string, ClientBriefResult>>({});
-    const [loading, setLoading] = useState<Record<string, boolean>>({});
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [totalMatches, setTotalMatches] = useState(0);
     const [totalHotDeals, setTotalHotDeals] = useState(0);
+    const [briefsLoaded, setBriefsLoaded] = useState(false);
+    const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
-    // Load all saved clients on mount
+    // Load clients + pre-computed briefs on mount — single fetch, no background calls
     useEffect(() => {
         const init = async () => {
+            // Load clients from Supabase
             const allClients = await loadAllClients();
             setClients(allClients);
 
-            // Auto-expand first client
             if (allClients.length > 0) {
                 setExpanded({ [allClients[0].id!]: true });
             }
 
-            // Seed results immediately with demo data keyed by client name slug
-            const seeded: Record<string, ClientBriefResult> = {};
-            allClients.forEach(client => {
-                const slug = client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-                const demo = Object.values(DEMO_PROPERTIES).find(d => d.clientName === client.name) || DEMO_PROPERTIES[slug];
-                if (demo) {
-                    seeded[client.id!] = { ...demo, clientId: client.id! };
+            // Fetch pre-computed briefs from Supabase Storage (via API)
+            try {
+                const res = await fetch("/api/client-briefs", { cache: "no-store" });
+                if (res.ok) {
+                    const data = await res.json();
+                    const briefs: Record<string, ClientBriefResult> = data.briefs || {};
+                    setResults(briefs);
+                    setGeneratedAt(data.generatedAt);
                 }
-            });
-            setResults(seeded);
+            } catch (err) {
+                console.error("Failed to load pre-computed briefs:", err);
+            }
 
-            // Also fire real API calls in the background — will update if they succeed
-            allClients.forEach(client => {
-                fetchClientBrief(client);
-            });
+            setBriefsLoaded(true);
         };
         init();
     }, []);
@@ -146,25 +67,6 @@ export default function MorningBriefPage() {
         setTotalHotDeals(hot);
     }, [results]);
 
-    const fetchClientBrief = async (client: BuyBoxCriteria) => {
-        setLoading(prev => ({ ...prev, [client.id!]: true }));
-        try {
-            const res = await fetch("/api/morning-brief", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ buybox: client })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setResults(prev => ({ ...prev, [client.id!]: data }));
-            }
-        } catch (err) {
-            console.error(`Morning brief failed for ${client.name}:`, err);
-        } finally {
-            setLoading(prev => ({ ...prev, [client.id!]: false }));
-        }
-    };
-
     const toggleExpand = (id: string) => {
         setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
     };
@@ -173,8 +75,9 @@ export default function MorningBriefPage() {
         const t = type.toLowerCase();
         if (t.includes("strip") || t.includes("retail")) return "🏬";
         if (t.includes("warehouse") || t.includes("industrial")) return "🏭";
-        if (t.includes("mechanic") || t.includes("collision")) return "🔧";
-        if (t.includes("residential")) return "🏠";
+        if (t.includes("mechanic") || t.includes("collision") || t.includes("auto")) return "🔧";
+        if (t.includes("residential") || t.includes("single")) return "🏠";
+        if (t.includes("office")) return "🏢";
         return "📋";
     };
 
@@ -183,7 +86,7 @@ export default function MorningBriefPage() {
             case "mls": return { label: "MLS", color: "bg-blue-500/10 text-blue-400 border-blue-500/30" };
             case "crexi": return { label: "CREXI", color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" };
             case "loopnet": return { label: "LOOPNET", color: "bg-red-500/10 text-red-400 border-red-500/30" };
-            default: return { label: platform.toUpperCase(), color: "bg-[#242424] text-[#A3A3A3] border-[#333]" };
+            default: return { label: platform?.toUpperCase() || "N/A", color: "bg-[#242424] text-[#A3A3A3] border-[#333]" };
         }
     };
 
@@ -204,7 +107,7 @@ export default function MorningBriefPage() {
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
                         <span className="text-[11px] font-mono text-green-400/80 uppercase tracking-wider">Live</span>
                     </div>
-                    <span className="text-[11px] font-mono text-[#D4AF37] uppercase tracking-wider">Crexi • LoopNet</span>
+                    <span className="text-[11px] font-mono text-[#D4AF37] uppercase tracking-wider">Crexi • LoopNet • MLS</span>
                 </div>
             </header>
 
@@ -216,6 +119,11 @@ export default function MorningBriefPage() {
                         <h2 className="text-3xl font-display font-medium tracking-tight">Good Morning</h2>
                     </div>
                     <p className="text-[#A3A3A3] font-mono text-xs uppercase tracking-wider">{dateStr}</p>
+                    {generatedAt && (
+                        <p className="text-[#7C7C7C] font-mono text-[10px] uppercase tracking-wider mt-1">
+                            Last scan: {new Date(generatedAt).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, month: "short", day: "numeric" })}
+                        </p>
+                    )}
                 </div>
 
                 {/* Summary Bar */}
@@ -242,7 +150,7 @@ export default function MorningBriefPage() {
                 </div>
 
                 {/* Client Sections */}
-                {clients.length === 0 ? (
+                {clients.length === 0 && briefsLoaded ? (
                     <div className="text-center py-24">
                         <span className="text-5xl mb-6 block">📋</span>
                         <h3 className="text-xl font-display font-medium mb-2">No clients configured</h3>
@@ -252,7 +160,6 @@ export default function MorningBriefPage() {
                     <div className="space-y-4">
                         {clients.map(client => {
                             const result = results[client.id!];
-                            const isLoading = loading[client.id!];
                             const isExpanded = expanded[client.id!];
                             const icon = getClientIcon(client.propertyType || "");
 
@@ -275,11 +182,13 @@ export default function MorningBriefPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            {isLoading ? (
-                                                <div className="w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
-                                            ) : result ? (
+                                            {result ? (
                                                 <span className={`px-3 py-1 rounded-full text-[11px] font-mono font-bold tracking-wider ${result.matchCount > 0 ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30' : 'bg-[#242424] text-[#7C7C7C] border border-[#333]'}`}>
                                                     {result.matchCount} {result.matchCount === 1 ? "MATCH" : "MATCHES"}
+                                                </span>
+                                            ) : briefsLoaded ? (
+                                                <span className="px-3 py-1 rounded-full text-[11px] font-mono font-bold tracking-wider bg-[#242424] text-[#7C7C7C] border border-[#333]">
+                                                    PENDING
                                                 </span>
                                             ) : null}
                                             <span className="text-[#7C7C7C] text-sm">{isExpanded ? "▲" : "▼"}</span>
@@ -289,9 +198,7 @@ export default function MorningBriefPage() {
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="border-t border-[#242424] px-6 py-6">
-                                            {isLoading && !result ? (
-                                                <MogulFactLoader message={`Scanning for ${client.name?.replace(/^[^\s]+\s/, '')}...`} />
-                                            ) : result ? (
+                                            {result ? (
                                                 <div className="space-y-6">
                                                     {/* Client Briefing */}
                                                     <div className="bg-[#0A0A0A] border border-[#242424] p-5 rounded-xl">
@@ -332,10 +239,10 @@ export default function MorningBriefPage() {
                                                                             {/* Tax Incentive Badges */}
                                                                             <div className="flex gap-2 mt-2">
                                                                                 {prop.taxIncentives?.isOpportunityZone && (
-                                                                                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">💰 OZ</span>
+                                                                                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">OZ</span>
                                                                                 )}
                                                                                 {prop.taxIncentives?.isRenaissanceZone && (
-                                                                                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30">🏛️ RZ</span>
+                                                                                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30">RZ</span>
                                                                                 )}
                                                                             </div>
                                                                         </div>
@@ -345,13 +252,12 @@ export default function MorningBriefPage() {
                                                         </div>
                                                     )}
 
-                                                    {/* Near Misses (when 0 exact matches) */}
+                                                    {/* Near Misses */}
                                                     {result.properties.length === 0 && result.nearMisses && result.nearMisses.length > 0 && (
                                                         <div>
                                                             <div className="flex items-center gap-2 mb-4">
                                                                 <span className="text-sm">🎯</span>
                                                                 <h4 className="text-sm font-display font-medium text-[#D4AF37]">Worth a Second Look</h4>
-                                                                <span className="text-[10px] font-mono text-[#7C7C7C]">— Almost matched {client.name?.replace(/^[^\s]+\s/, '')}'s criteria</span>
                                                             </div>
                                                             <div className="space-y-3">
                                                                 {result.nearMisses.map((nm: any, i: number) => (
@@ -363,7 +269,6 @@ export default function MorningBriefPage() {
                                                                         <p className="text-xs text-[#D1D1D1] leading-relaxed mb-2">{nm.whyItAlmostMatched}</p>
                                                                         {nm.suggestion && (
                                                                             <div className="flex items-center gap-2 bg-[#0A0A0A] border border-[#242424] px-3 py-2 rounded-lg">
-                                                                                <span className="text-xs">💡</span>
                                                                                 <span className="text-[11px] text-[#D4AF37] font-mono">{nm.suggestion}</span>
                                                                             </div>
                                                                         )}
@@ -377,13 +282,19 @@ export default function MorningBriefPage() {
                                                     {result.properties.length === 0 && (!result.nearMisses || result.nearMisses.length === 0) && (
                                                         <div className="text-center py-8 bg-[#0A0A0A] border border-[#242424] rounded-xl">
                                                             <span className="text-3xl mb-3 block">🔍</span>
-                                                            <p className="text-sm text-[#A3A3A3] mb-1">Market's quiet for {client.name?.replace(/^[^\s]+\s/, '')} today.</p>
+                                                            <p className="text-sm text-[#A3A3A3] mb-1">Market's quiet for {client.name} today.</p>
                                                             <p className="text-xs text-[#7C7C7C]">We'll keep scanning Crexi, LoopNet, and MLS around the clock.</p>
                                                         </div>
                                                     )}
                                                 </div>
+                                            ) : briefsLoaded ? (
+                                                <div className="text-center py-8 bg-[#0A0A0A] border border-[#242424] rounded-xl">
+                                                    <span className="text-3xl mb-3 block">⏳</span>
+                                                    <p className="text-sm text-[#A3A3A3] mb-1">Analysis pending for {client.name}.</p>
+                                                    <p className="text-xs text-[#7C7C7C]">Brief will be generated on the next daily scan cycle.</p>
+                                                </div>
                                             ) : (
-                                                <div className="text-center py-8 text-[#A3A3A3] text-sm">Failed to load analysis. Try refreshing.</div>
+                                                <div className="text-center py-8 text-[#A3A3A3] text-sm">Loading...</div>
                                             )}
                                         </div>
                                     )}

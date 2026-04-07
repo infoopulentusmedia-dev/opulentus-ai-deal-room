@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { getLocalComps } from "@/lib/apify/compsFetcher";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 const SYSTEM_INSTRUCTION = `You are Opulentus Valuation Analyst, an elite commercial real estate AI.
 Your job is to compare an active asking price against recently closed sales data (comps) to determine if a property is overpriced, underpriced, or at market value.
@@ -39,14 +39,16 @@ ${JSON.stringify(comps, null, 2)}
 Provide the valuation analysis paragraph.
 `;
 
-        const message = await client.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 512,
-            system: SYSTEM_INSTRUCTION,
-            messages: [{ role: 'user', content: prompt }],
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt,
+            config: {
+                maxOutputTokens: 512,
+                systemInstruction: SYSTEM_INSTRUCTION,
+            },
         });
 
-        const analysis = ((message.content[0] as { type: string; text: string }).text || "").trim()
+        const analysis = (response.text || "").trim()
             || "Valuation analysis could not overlap with historical indices.";
 
         return NextResponse.json({ analysis });

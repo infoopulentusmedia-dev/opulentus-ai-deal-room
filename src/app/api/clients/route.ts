@@ -79,6 +79,16 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
+        // Trigger morning brief generation for this client in the background
+        // Uses fire-and-forget so the client save isn't slowed down
+        if (data?.id) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://opulentus.vercel.app";
+            fetch(`${appUrl}/api/generate-client-briefs?clientId=${data.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            }).catch(err => console.error("[Clients] Brief generation trigger failed (non-fatal):", err.message));
+        }
+
         return NextResponse.json({ success: true, client: data });
 
     } catch (err: any) {

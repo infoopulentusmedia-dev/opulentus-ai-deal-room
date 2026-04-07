@@ -42,6 +42,21 @@ export async function GET(req: Request) {
 
         console.log(`[Cron] Successfully scanned and locked in ${finalListings.length} properties for ${record.date}.`);
 
+        // After scraping, generate pre-computed morning briefs for all clients
+        try {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://opulentus.vercel.app";
+            console.log("[Cron] Triggering morning brief generation for all clients...");
+            const briefRes = await fetch(`${appUrl}/api/generate-client-briefs`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            const briefData = await briefRes.json();
+            console.log(`[Cron] Brief generation result:`, briefData);
+        } catch (briefErr: any) {
+            // Don't fail the cron if brief generation fails
+            console.error("[Cron] Brief generation failed (non-fatal):", briefErr.message);
+        }
+
         return NextResponse.json({
             success: true,
             message: `Locked in ${finalListings.length} properties.`,
