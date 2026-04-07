@@ -1,57 +1,51 @@
-import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
 
-const ai = new GoogleGenAI({});
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const MODEL = 'claude-sonnet-4-6';
+
+const cleanJson = (text: string): string =>
+    text.replace(/```json\n?|\n?```/g, '').trim();
 
 export async function generateOrchestratorPlan(prompt: string) {
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: `You are Opulentus, a Real Estate AI dealing exclusively in exact deals. 
+        const message = await client.messages.create({
+            model: MODEL,
+            max_tokens: 4096,
+            system: `You are Opulentus, a Real Estate AI dealing exclusively in exact deals.
 Your goal is to parse user intents, query the RealComp database, and formulate a highly structured response plan.
 Respond in valid JSON only matching the established assistant-command schema.`,
-                temperature: 0.1,
-                responseMimeType: "application/json",
-            }
+            messages: [{ role: 'user', content: prompt }],
         });
 
-        if (response.text) {
-            return JSON.parse(response.text);
-        }
+        const text = (message.content[0] as { type: string; text: string }).text;
+        if (text) return JSON.parse(cleanJson(text));
 
-        throw new Error("Empty response from Gemini");
-
+        throw new Error('Empty response from Claude');
     } catch (error) {
-        console.error("Gemini Generation Error:", error);
+        console.error('Claude OrchestratorPlan Error:', error);
         throw error;
     }
 }
 
 /**
- * General-purpose Gemini analysis for Deal Room tabs.
- * Accepts a system instruction, user prompt, and expected JSON schema hint.
+ * General-purpose Claude analysis for Deal Room tabs.
+ * Accepts a system instruction, user prompt, returns parsed JSON.
  */
 export async function generateAnalysis(systemInstruction: string, prompt: string): Promise<any> {
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction,
-                temperature: 0.2,
-                responseMimeType: "application/json",
-            }
+        const message = await client.messages.create({
+            model: MODEL,
+            max_tokens: 4096,
+            system: systemInstruction,
+            messages: [{ role: 'user', content: prompt }],
         });
 
-        if (response.text) {
-            return JSON.parse(response.text);
-        }
+        const text = (message.content[0] as { type: string; text: string }).text;
+        if (text) return JSON.parse(cleanJson(text));
 
-        throw new Error("Empty response from Gemini analysis");
-
+        throw new Error('Empty response from Claude analysis');
     } catch (error) {
-        console.error("Gemini Analysis Error:", error);
+        console.error('Claude Analysis Error:', error);
         throw error;
     }
 }
@@ -61,19 +55,16 @@ export async function generateAnalysis(systemInstruction: string, prompt: string
  */
 export async function generateNarrative(systemInstruction: string, prompt: string): Promise<string> {
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction,
-                temperature: 0.3,
-            }
+        const message = await client.messages.create({
+            model: MODEL,
+            max_tokens: 2048,
+            system: systemInstruction,
+            messages: [{ role: 'user', content: prompt }],
         });
 
-        return response.text || "No analysis generated.";
-
+        return (message.content[0] as { type: string; text: string }).text || 'No analysis generated.';
     } catch (error) {
-        console.error("Gemini Narrative Error:", error);
+        console.error('Claude Narrative Error:', error);
         throw error;
     }
 }

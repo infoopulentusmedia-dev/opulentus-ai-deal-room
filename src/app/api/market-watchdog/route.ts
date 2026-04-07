@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import { getLatestScan } from "@/lib/db";
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_INSTRUCTION = `You are Opulentus Market Intelligence, an AI that analyzes real estate market data to detect macro-level trends and anomalies.
 
@@ -34,18 +35,15 @@ export async function GET() {
 
         const prompt = `Analyze this batch of ${feed.length} current Michigan property listings and generate market intelligence alerts:\n\n${JSON.stringify(feed, null, 2)}`;
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-                temperature: 0.3,
-            }
+        const message = await client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1024,
+            system: SYSTEM_INSTRUCTION,
+            messages: [{ role: 'user', content: prompt }],
         });
 
-        const text = response.text?.trim() || "";
+        const text = ((message.content[0] as { type: string; text: string }).text || "").trim();
 
-        // Parse the JSON from Gemini response
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             return NextResponse.json({ alerts: [] });

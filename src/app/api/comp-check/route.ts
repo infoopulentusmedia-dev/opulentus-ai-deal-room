@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import { getLocalComps } from "@/lib/apify/compsFetcher";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_INSTRUCTION = `You are Opulentus Valuation Analyst, an elite commercial real estate AI. 
+const SYSTEM_INSTRUCTION = `You are Opulentus Valuation Analyst, an elite commercial real estate AI.
 Your job is to compare an active asking price against recently closed sales data (comps) to determine if a property is overpriced, underpriced, or at market value.
 
 Given the active property details and a list of closed comps, provide a short, punchy, hyper-analytical paragraph (2-3 sentences max).
@@ -18,8 +18,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing property data" }, { status: 400 });
         }
 
-        // 1. Fetch Closed Comps from our Apify Simulator (Step 10)
-        // We use a fallback zip code to ensure we get some data in this demo.
         const comps = await getLocalComps(property.propertyType, property.zipCode || "481");
 
         if (comps.length === 0) {
@@ -28,7 +26,6 @@ export async function POST(req: Request) {
             });
         }
 
-        // 2. Format the Prompt for Gemini
         const prompt = `
 Active Property:
 Address: ${property.address}, ${property.city}
@@ -42,17 +39,15 @@ ${JSON.stringify(comps, null, 2)}
 Provide the valuation analysis paragraph.
 `;
 
-        // 3. Generate the Comp Analysis
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-                temperature: 0.2,
-            }
+        const message = await client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 512,
+            system: SYSTEM_INSTRUCTION,
+            messages: [{ role: 'user', content: prompt }],
         });
 
-        const analysis = response.text?.trim() || "Valuation analysis could not overlap with historical indices.";
+        const analysis = ((message.content[0] as { type: string; text: string }).text || "").trim()
+            || "Valuation analysis could not overlap with historical indices.";
 
         return NextResponse.json({ analysis });
 
