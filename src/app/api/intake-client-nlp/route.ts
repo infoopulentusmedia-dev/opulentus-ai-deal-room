@@ -61,7 +61,15 @@ RULE 5 — LOCATION EXTRACTION
 - If NO location is mentioned, use "Any Location".
 
 ═══════════════════════════════════════
-RULE 6 — SPECIAL CRITERIA EXTRACTION
+RULE 6 — TRANSACTION TYPE
+═══════════════════════════════════════
+Determine the transaction intent and return EXACTLY ONE of:
+- "Buy" — client wants to purchase (DEFAULT if not specified)
+- "For Lease" — client wants to lease or rent
+- "Auction" — explicitly mentions auction
+
+═══════════════════════════════════════
+RULE 7 — SPECIAL CRITERIA EXTRACTION
 ═══════════════════════════════════════
 - Distressed / foreclosure requirements → include in specialCriteria
 - Cap rate requirements ("minimum 8% cap rate") → include in specialCriteria
@@ -69,14 +77,14 @@ RULE 6 — SPECIAL CRITERIA EXTRACTION
 - If none mentioned, return "".
 
 ═══════════════════════════════════════
-RULE 7 — SIZE EXTRACTION
+RULE 8 — SIZE EXTRACTION
 ═══════════════════════════════════════
 - "at least 40,000 sqft" or "40k sqft minimum" → sizeMin: "40000"
 - "no bigger than 80,000 sqft" or "max 80k sqft" → sizeMax: "80000"
 - If not mentioned, return "" for both.
 
 ═══════════════════════════════════════
-RULE 8 — SENTENCE UNDERSTANDING
+RULE 9 — SENTENCE UNDERSTANDING
 ═══════════════════════════════════════
 You MUST handle ALL of these sentence structures:
 - Command: "Add John, retail, Wayne County, $1-5M, john@kw.com"
@@ -93,6 +101,7 @@ OUTPUT — STRICTLY VALID JSON
   "name": "Full Name",
   "email": "email@example.com or empty string",
   "propertyType": "Exactly one valid type from the table above",
+  "transactionType": "Buy | For Lease | Auction",
   "location": "Geographic target",
   "priceMin": "Raw integer string or empty",
   "priceMax": "Raw integer string or empty",
@@ -117,16 +126,12 @@ export async function POST(req: Request) {
         const analysis = await generateAnalysis(NLP_INTAKE_SYSTEM, `Broker Command: "${prompt}"`);
         
         // 2. Format the payload for the existing Supabase Client structure
-        const clientId = analysis.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-        
         const upsertPayload: any = {
-            name: analysis.name,
             updated_at: new Date().toISOString(),
             buy_box_json: {
-                id: clientId,
                 name: analysis.name,
                 propertyType: analysis.propertyType || "Commercial",
-                transactionType: "Buy",
+                transactionType: analysis.transactionType || "Buy",
                 location: analysis.location || "Any Location",
                 priceMin: analysis.priceMin || "",
                 priceMax: analysis.priceMax || "",
@@ -140,20 +145,41 @@ export async function POST(req: Request) {
             upsertPayload.email = analysis.email;
         }
 
-        // 3. Immediately commit to Supabase to hook them into the 7AM Blast
-        const { data, error } = await supabaseAdmin.from('clients').upsert(
-            upsertPayload,
-            { onConflict: 'name' }
-        ).select();
+        // 3. Immediately commit to Supabase — check-then-insert/update (no unique constraint on name)
+        const { data: existing, error: findError } = await supabaseAdmin
+            .from('clients')
+            .select('id')
+            .eq('name', analysis.name)
+            .maybeSingle();
 
-        if (error) {
-            console.error("Supabase NLP Intake Commit Error:", error);
-            throw error;
+        if (findError) {
+            console.error("Supabase NLP Intake Lookup Error:", findError);
+            throw findError;
         }
 
-        return NextResponse.json({ 
-            success: true, 
-            client: data[0] 
+        let savedClient;
+        if (existing) {
+            const { data, error } = await supabaseAdmin
+                .from('clients')
+                .update(upsertPayload)
+                .eq('id', existing.id)
+                .select()
+                .single();
+            if (error) { console.error("Supabase NLP Intake Update Error:", error); throw error; }
+            savedClient = data;
+        } else {
+            const { data, error } = await supabaseAdmin
+                .from('clients')
+                .insert({ name: analysis.name, ...upsertPayload })
+                .select()
+                .single();
+            if (error) { console.error("Supabase NLP Intake Insert Error:", error); throw error; }
+            savedClient = data;
+        }
+
+        return NextResponse.json({
+            success: true,
+            client: savedClient
         });
 
     } catch (error: any) {

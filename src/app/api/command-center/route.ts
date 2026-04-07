@@ -63,7 +63,15 @@ Map the requested asset to EXACTLY ONE of these strings:
 - "Commercial" (office, gas station, land — DEFAULT if vague)
 
 ═══════════════════════════════════════
-RULE 4 — PRICE NORMALIZATION
+RULE 4 — TRANSACTION TYPE
+═══════════════════════════════════════
+Determine the transaction intent and return EXACTLY ONE of:
+- "Buy" — client wants to purchase (DEFAULT if not specified)
+- "For Lease" — client wants to lease or rent
+- "Auction" — explicitly mentions auction
+
+═══════════════════════════════════════
+RULE 5 — PRICE NORMALIZATION
 ═══════════════════════════════════════
 Convert ALL price references to raw integer strings:
 - "$5M", "5 mil", "5 million" → "5000000"
@@ -74,14 +82,14 @@ Convert ALL price references to raw integer strings:
 - If NO price is mentioned, return "" for both.
 
 ═══════════════════════════════════════
-RULE 5 — LOCATION, SIZE & SPECIAL
+RULE 6 — LOCATION, SIZE & SPECIAL
 ═══════════════════════════════════════
 - Extract geography (Counties, cities, zips). Multiple OK. None → "Any Location".
 - "40k sqft minimum" → sizeMin: "40000"
 - Distressed, cap rate, constraints → specialCriteria. None → "".
 
 OUTPUT STRICTLY VALID JSON:
-{ "name":"","email":"","propertyType":"","location":"","priceMin":"","priceMax":"","sizeMin":"","sizeMax":"","specialCriteria":"" }
+{ "name":"","email":"","propertyType":"","transactionType":"Buy","location":"","priceMin":"","priceMax":"","sizeMin":"","sizeMax":"","specialCriteria":"" }
 `;
 
 // ═══════════════════════════════════════
@@ -130,37 +138,57 @@ export async function POST(req: Request) {
             // ───────────────────────────
             case "add": {
                 const analysis = await generateAnalysis(ADD_CLIENT_PROMPT, `Broker Command: "${prompt}"`);
-                const clientId = analysis.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
-                const upsertPayload: any = {
+                const now = new Date().toISOString();
+                const buyBoxJson = {
                     name: analysis.name,
-                    updated_at: new Date().toISOString(),
-                    buy_box_json: {
-                        id: clientId,
-                        name: analysis.name,
-                        propertyType: analysis.propertyType || "Commercial",
-                        transactionType: "Buy",
-                        location: analysis.location || "Any Location",
-                        priceMin: analysis.priceMin || "",
-                        priceMax: analysis.priceMax || "",
-                        sizeMin: analysis.sizeMin || "",
-                        sizeMax: analysis.sizeMax || "",
-                        specialCriteria: analysis.specialCriteria || ""
-                    }
+                    propertyType: analysis.propertyType || "Commercial",
+                    transactionType: analysis.transactionType || "Buy",
+                    location: analysis.location || "Any Location",
+                    priceMin: analysis.priceMin || "",
+                    priceMax: analysis.priceMax || "",
+                    sizeMin: analysis.sizeMin || "",
+                    sizeMax: analysis.sizeMax || "",
+                    specialCriteria: analysis.specialCriteria || ""
                 };
-                if (analysis.email) upsertPayload.email = analysis.email;
 
-                const { data, error } = await supabaseAdmin.from('clients').upsert(
-                    upsertPayload, { onConflict: 'name' }
-                ).select();
+                const fields: any = { buy_box_json: buyBoxJson, updated_at: now };
+                if (analysis.email) fields.email = analysis.email;
 
-                if (error) throw error;
+                // Check-then-insert/update: avoids broken upsert with non-existent unique constraint
+                const { data: existing, error: findError } = await supabaseAdmin
+                    .from('clients')
+                    .select('id')
+                    .eq('name', analysis.name)
+                    .maybeSingle();
+
+                if (findError) throw findError;
+
+                let savedClient;
+                if (existing) {
+                    const { data, error } = await supabaseAdmin
+                        .from('clients')
+                        .update(fields)
+                        .eq('id', existing.id)
+                        .select()
+                        .single();
+                    if (error) throw error;
+                    savedClient = data;
+                } else {
+                    const { data, error } = await supabaseAdmin
+                        .from('clients')
+                        .insert({ name: analysis.name, ...fields })
+                        .select()
+                        .single();
+                    if (error) throw error;
+                    savedClient = data;
+                }
 
                 return NextResponse.json({
                     intent: "add",
                     success: true,
                     message: `${analysis.name} has been locked into the 7:00 AM Deal Flow.`,
-                    client: data[0]
+                    client: savedClient
                 });
             }
 
@@ -277,12 +305,12 @@ export async function POST(req: Request) {
                 const client = clients[0];
                 const bb = client.buy_box_json || {};
 
-                // Fetch their latest AI analyses
+                // Fetch their latest AI analyses — use UUID, match actual column names
                 const { data: analyses } = await supabaseAdmin
                     .from('ai_analyses')
-                    .select('property_id, score, reason, created_at')
-                    .eq('client_id', client.name)
-                    .order('score', { ascending: false })
+                    .select('property_id, ai_score, ai_reason')
+                    .eq('client_id', client.id)
+                    .order('ai_score', { ascending: false })
                     .limit(5);
 
                 return NextResponse.json({

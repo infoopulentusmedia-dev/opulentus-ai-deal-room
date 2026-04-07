@@ -45,6 +45,15 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
         if (step > 1) setStep(step - 1);
     };
 
+    const normalizeNumeric = (val: string): string => {
+        const s = val.trim().replace(/,/g, "").toLowerCase();
+        if (!s) return "";
+        const multiplier = s.endsWith("m") ? 1_000_000 : s.endsWith("k") ? 1_000 : 1;
+        const num = parseFloat(s.replace(/[^0-9.]/g, ""));
+        if (isNaN(num)) return val; // leave unchanged if unparseable
+        return String(Math.round(num * multiplier));
+    };
+
     const handleSubmit = async () => {
         if (!formData.name.trim()) {
             setSaveError("Client name is required.");
@@ -53,8 +62,15 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
         setIsSaving(true);
         setSaveError(null);
         try {
-            // saveClientBuyBox now returns the real Supabase UUID
-            const savedUUID = await saveClientBuyBox(formData);
+            // Normalize price/size fields before saving so "5M" → "5000000", "40k" → "40000"
+            const normalizedData = {
+                ...formData,
+                priceMin: normalizeNumeric(formData.priceMin),
+                priceMax: normalizeNumeric(formData.priceMax),
+                sizeMin: normalizeNumeric(formData.sizeMin),
+                sizeMax: normalizeNumeric(formData.sizeMax),
+            };
+            const savedUUID = await saveClientBuyBox(normalizedData);
             if (!savedUUID) {
                 setSaveError("Failed to save client — database unreachable. Please try again.");
                 return;

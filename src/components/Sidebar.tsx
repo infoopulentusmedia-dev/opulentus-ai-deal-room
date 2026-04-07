@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import BuyBoxWizard from "./BuyBoxWizard";
@@ -123,21 +122,29 @@ export default function Sidebar() {
                         <span className="text-[10px] font-mono tracking-wider text-[#7C7C7C] uppercase opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Live Clients</span>
                     </div>
 
-                    {clients.map(client => (
-                        <button
-                            key={client.id}
-                            onClick={() => router.push(`/daily-updates?client=${client.id}`)}
-                            className={`w-full flex items-center px-2 py-3 rounded-lg transition-colors text-left ${pathname === '/daily-updates' && (mounted && window.location.search.includes(`client=${client.id}`)) ? 'bg-[#171717] text-[#D4AF37]' : 'text-[#A3A3A3] hover:bg-[#171717] hover:text-white'}`}
-                        >
-                            <div className="w-8 flex items-center justify-center shrink-0">
-                                <span className="text-xl">{client.name.match(/[\uD83C-\uDBFF]|[\uDC00-\uDFFF]/) ? '' : '🏢'}</span>
-                                {client.name.match(/[\uD83C-\uDBFF]|[\uDC00-\uDFFF]/) ? client.name.split(' ')[0] : ''}
-                            </div>
-                            <span className="ml-4 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                {client.name.match(/[\uD83C-\uDBFF]|[\uDC00-\uDFFF]/) ? client.name.split(' ').slice(1).join(' ') : client.name}
-                            </span>
-                        </button>
-                    ))}
+                    {clients.map(client => {
+                        const t = ((client.buy_box_json?.propertyType) || "").toLowerCase();
+                        const icon = t.includes("residential") ? "🏡"
+                            : (t.includes("industrial") || t.includes("warehouse")) ? "🏭"
+                            : (t.includes("retail") || t.includes("strip")) ? "🏬"
+                            : (t.includes("mechanic") || t.includes("dealership")) ? "🔧"
+                            : t.includes("multifamily") ? "🏘️"
+                            : "🏢";
+                        return (
+                            <button
+                                key={client.id}
+                                onClick={() => router.push(`/daily-updates?client=${client.id}`)}
+                                className={`w-full flex items-center px-2 py-3 rounded-lg transition-colors text-left ${pathname === '/daily-updates' && (mounted && window.location.search.includes(`client=${client.id}`)) ? 'bg-[#171717] text-[#D4AF37]' : 'text-[#A3A3A3] hover:bg-[#171717] hover:text-white'}`}
+                            >
+                                <div className="w-8 flex items-center justify-center shrink-0">
+                                    <span className="text-xl">{icon}</span>
+                                </div>
+                                <span className="ml-4 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                    {client.name}
+                                </span>
+                            </button>
+                        );
+                    })}
 
                     {/* Add Client Button */}
                     <button

@@ -2,12 +2,65 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { loadSessions, ChatSession } from "@/lib/chatStore";
 import WatchtowerDrawer from "@/components/WatchtowerDrawer";
 import { loadAllClients, BuyBoxCriteria } from "@/lib/buybox";
 import ClientGate from "@/components/ClientGate";
 import { AnimatePresence } from "framer-motion";
+
+function propertyIcon(propertyType: string): string {
+  const t = (propertyType || "").toLowerCase();
+  if (t.includes("residential")) return "🏡";
+  if (t.includes("industrial") || t.includes("warehouse")) return "🏭";
+  if (t.includes("retail") || t.includes("strip")) return "🏬";
+  if (t.includes("mechanic") || t.includes("dealership")) return "🔧";
+  if (t.includes("multifamily")) return "🏘️";
+  return "🏢";
+}
+
+function formatPrice(min: string, max: string): string {
+  const fmt = (v: string) => {
+    const n = parseInt(v);
+    if (isNaN(n)) return null;
+    return n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+      : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}k`
+      : `$${n}`;
+  };
+  const lo = min ? fmt(min) : null;
+  const hi = max ? fmt(max) : null;
+  if (lo && hi) return `${lo} – ${hi}`;
+  if (lo) return `${lo}+`;
+  if (hi) return `Up to ${hi}`;
+  return "Any Price";
+}
+
+function formatSize(min: string, max: string): string | null {
+  const fmt = (v: string) => {
+    const n = parseInt(v);
+    if (isNaN(n)) return null;
+    return n >= 1_000 ? `${(n / 1_000).toFixed(0)}k SF` : `${n} SF`;
+  };
+  const lo = min ? fmt(min) : null;
+  const hi = max ? fmt(max) : null;
+  if (lo && hi) return `${lo} – ${hi}`;
+  if (lo) return `${lo}+`;
+  if (hi) return `Up to ${hi}`;
+  return null;
+}
+
+function formatClientBox(box: BuyBoxCriteria & { id?: string }) {
+  return {
+    slug: box.id || "",
+    name: box.name,
+    icon: propertyIcon(box.propertyType),
+    type: box.propertyType || "Commercial",
+    transactionType: box.transactionType || "Buy",
+    location: box.location || "Any Location",
+    price: formatPrice(box.priceMin, box.priceMax),
+    size: formatSize(box.sizeMin, box.sizeMax),
+    specialCriteria: box.specialCriteria || "",
+  };
+}
 
 export default function Home() {
   const router = useRouter();
@@ -38,28 +91,7 @@ export default function Home() {
       setRecentSessions(await loadSessions());
 
       const allClients = await loadAllClients();
-      const formattedClients = allClients.map((box: BuyBoxCriteria) => {
-        let icon = "🏢";
-        const typeStr = (box.propertyType || "Commercial").toLowerCase();
-        if (typeStr.includes("residential")) icon = "🏡";
-        else if (typeStr.includes("industrial") || typeStr.includes("warehouse")) icon = "🏭";
-        else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
-        else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
-
-        const min = box.priceMin ? `$${(parseInt(box.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
-        const max = box.priceMax ? `$${(parseInt(box.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
-        let priceStr = `${min} – ${max}`;
-        if (!box.priceMin && !box.priceMax) priceStr = "Any Price";
-
-        return {
-          slug: box.id,
-          name: box.name,
-          type: box.propertyType || "Commercial",
-          location: box.location || "Any Location",
-          price: priceStr,
-          icon: icon,
-        };
-      });
+      const formattedClients = allClients.map((box: BuyBoxCriteria) => formatClientBox(box));
       setClientBuyBoxes(formattedClients);
     };
     init();
@@ -154,19 +186,9 @@ export default function Home() {
                 if (result.intent === 'add' && result.success) {
                   const client = result.client;
                   const bb = client.buy_box_json || {};
-                  const typeStr = (bb.propertyType || "Commercial").toLowerCase();
-                  let icon = "🏢";
-                  if (typeStr.includes("residential")) icon = "🏡";
-                  else if (typeStr.includes("industrial") || typeStr.includes("warehouse")) icon = "🏭";
-                  else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
-                  else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
-                  else if (typeStr.includes("multifamily")) icon = "🏘️";
-                  const min = bb.priceMin ? `$${(parseInt(bb.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
-                  const max = bb.priceMax ? `$${(parseInt(bb.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
                   const newBox = {
-                    slug: client.id || bb.id || client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-                    name: client.name, type: bb.propertyType || "Commercial",
-                    location: bb.location || "Any Location", price: `${min} – ${max}`, icon, isNew: true
+                    ...formatClientBox({ ...bb, id: client.id, name: client.name }),
+                    isNew: true,
                   };
                   setClientBuyBoxes(prev => [newBox, ...prev.filter(b => b.slug !== newBox.slug)]);
                   setCommandStatus({ message: result.message, type: 'success' });
@@ -175,20 +197,8 @@ export default function Home() {
                 } else if (result.intent === 'edit' && result.success) {
                   const client = result.client;
                   const bb = client.buy_box_json || {};
-                  const typeStr = (bb.propertyType || "Commercial").toLowerCase();
-                  let icon = "🏢";
-                  if (typeStr.includes("residential")) icon = "🏡";
-                  else if (typeStr.includes("industrial") || typeStr.includes("warehouse")) icon = "🏭";
-                  else if (typeStr.includes("retail") || typeStr.includes("strip")) icon = "🏬";
-                  else if (typeStr.includes("mechanic") || typeStr.includes("dealership")) icon = "🔧";
-                  else if (typeStr.includes("multifamily")) icon = "🏘️";
-                  const min = bb.priceMin ? `$${(parseInt(bb.priceMin) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "$0";
-                  const max = bb.priceMax ? `$${(parseInt(bb.priceMax) / 1000000).toFixed(1).replace(/\.0$/, '')}M` : "No Max";
-                  const slug = client.id || bb.id || client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                  setClientBuyBoxes(prev => prev.map(b => b.name === client.name ? {
-                    ...b, type: bb.propertyType || b.type, location: bb.location || b.location,
-                    price: `${min} – ${max}`, icon
-                  } : b));
+                  const updated = formatClientBox({ ...bb, id: client.id, name: client.name });
+                  setClientBuyBoxes(prev => prev.map(b => b.slug === client.id ? updated : b));
                   setCommandStatus({ message: result.message, type: 'success' });
                   window.dispatchEvent(new Event('opulentus:clients-changed'));
 
@@ -297,32 +307,77 @@ export default function Home() {
             <span className="text-[11px] font-mono text-[#7C7C7C] uppercase tracking-wider">{clientBuyBoxes.length} Active</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {clientBuyBoxes.map((box) => (
+          {clientBuyBoxes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-[#242424] rounded-xl bg-[#0A0A0A]">
+              <div className="text-4xl mb-4 opacity-40">🏢</div>
+              <p className="text-[14px] text-[#A3A3A3] mb-1 font-medium">No clients yet</p>
+              <p className="text-[12px] text-[#555] mb-5">Use the command bar above or the sidebar &ldquo;+&rdquo; button to add your first client.</p>
               <button
-                key={box.slug}
-                onClick={() => handleBuyBox(box.slug)}
-                className="group text-left p-5 rounded-xl border border-border bg-[#171717] hover:border-[#404040] transition-colors relative overflow-hidden"
+                onClick={() => setSearchInput("Add ")}
+                className="text-[11px] font-mono px-4 py-1.5 rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 text-[#D4AF37] hover:bg-[#D4AF37]/20 transition-colors"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                      <div className="text-2xl opacity-80">{box.icon}</div>
-                      <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                          <span className="text-[9px] font-mono text-green-500 uppercase tracking-widest">Active Router</span>
-                      </div>
-                  </div>
-                  <svg className="text-[#A3A3A3] group-hover:text-foreground transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-                </div>
-                <h4 className="font-display font-medium text-[15px] text-[#FAFAFA] mb-1">{box.name}</h4>
-                <p className="text-[13px] text-[#A3A3A3] mb-4">{box.type}</p>
-                <div className="flex items-center gap-3 text-[11px] font-mono">
-                  <span className="text-[#D4AF37] border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2 py-0.5 rounded">{box.price}</span>
-                  <span className="text-[#7C7C7C]">{box.location}</span>
-                </div>
+                + Add First Client
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {clientBuyBoxes.map((box) => (
+                <button
+                  key={box.slug}
+                  onClick={() => handleBuyBox(box.slug)}
+                  className="group text-left rounded-xl border border-border bg-[#171717] hover:border-[#404040] transition-colors relative overflow-hidden flex flex-col"
+                >
+                  {/* Card Header */}
+                  <div className="p-5 border-b border-[#242424]">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="text-2xl opacity-80">{box.icon}</div>
+                        <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                          <span className="text-[9px] font-mono text-green-500 uppercase tracking-widest">Active</span>
+                        </div>
+                      </div>
+                      <svg className="text-[#A3A3A3] group-hover:text-foreground transition-colors shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                    </div>
+                    <h4 className="font-display font-semibold text-[15px] text-[#FAFAFA] mb-0.5">{box.name}</h4>
+                    <p className="text-[12px] text-[#A3A3A3]">{box.type}</p>
+                  </div>
+
+                  {/* Criteria Grid */}
+                  <div className="p-5 grid grid-cols-2 gap-x-4 gap-y-4 flex-1">
+                    <div>
+                      <div className="text-[9px] font-mono text-[#555] uppercase tracking-wider mb-1">Transaction</div>
+                      <div className="text-[12px] text-[#FAFAFA] font-medium">{box.transactionType}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-mono text-[#555] uppercase tracking-wider mb-1">Price Range</div>
+                      <div className="text-[12px] text-[#D4AF37] font-medium border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2 py-0.5 rounded w-fit">{box.price}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-mono text-[#555] uppercase tracking-wider mb-1">Location</div>
+                      <div className="text-[12px] text-[#A3A3A3] leading-snug">{box.location}</div>
+                    </div>
+                    {box.size ? (
+                      <div>
+                        <div className="text-[9px] font-mono text-[#555] uppercase tracking-wider mb-1">Size</div>
+                        <div className="text-[12px] text-[#A3A3A3]">{box.size}</div>
+                      </div>
+                    ) : <div />}
+                  </div>
+
+                  {/* Special Criteria Footer */}
+                  {box.specialCriteria && (
+                    <div className="px-5 pb-4">
+                      <div className="bg-[#0A0A0A] border border-[#242424] rounded-lg p-3">
+                        <div className="text-[9px] font-mono text-[#555] uppercase tracking-wider mb-1">Special Criteria</div>
+                        <p className="text-[11px] text-[#7C7C7C] leading-relaxed line-clamp-2">{box.specialCriteria}</p>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Bottom Row: Recent Sessions + Watchtower */}
