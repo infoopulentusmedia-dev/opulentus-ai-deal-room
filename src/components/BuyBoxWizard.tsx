@@ -33,6 +33,7 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
     });
 
     const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -45,15 +46,23 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
     };
 
     const handleSubmit = async () => {
+        if (!formData.name.trim()) {
+            setSaveError("Client name is required.");
+            return;
+        }
         setIsSaving(true);
+        setSaveError(null);
         try {
             // saveClientBuyBox now returns the real Supabase UUID
             const savedUUID = await saveClientBuyBox(formData);
+            if (!savedUUID) {
+                setSaveError("Failed to save client — database unreachable. Please try again.");
+                return;
+            }
             if (onClientSaved) onClientSaved();
             onClose();
             // Always route with the Supabase UUID so loadClientBuyBox can find the record
-            const routeId = savedUUID || formData.id;
-            router.push(`/daily-updates?client=${routeId}`);
+            router.push(`/daily-updates?client=${savedUUID}`);
         } finally {
             setIsSaving(false);
         }
@@ -304,7 +313,13 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
                         </div>
 
                         {/* Footer Nav */}
-                        <div className="p-6 border-t border-[#242424] bg-[#0A0A0A] flex items-center justify-between">
+                        <div className="p-6 border-t border-[#242424] bg-[#0A0A0A] flex flex-col gap-3">
+                        {saveError && (
+                            <div className="w-full text-center text-xs font-mono text-red-400 bg-red-900/20 border border-red-900/40 rounded-lg px-4 py-2">
+                                {saveError}
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between">
                             <button
                                 onClick={handleBack}
                                 disabled={step === 1}
@@ -337,6 +352,7 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
                                     )}
                                 </button>
                             )}
+                        </div>
                         </div>
                     </motion.div>
                 </motion.div>

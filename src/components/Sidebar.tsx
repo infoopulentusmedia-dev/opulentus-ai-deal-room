@@ -24,13 +24,19 @@ export default function Sidebar() {
             .catch(console.error);
     };
 
-    // Load clients from Supabase on mount
+    // Load clients from Supabase on mount and when wizard closes
     useEffect(() => {
         setMounted(true);
         fetchClients();
-
         loadPersonalBuyBox().then(setPersonalBuyBox);
     }, [wizardOpen]);
+
+    // Refresh sidebar when the command-center adds/edits/deletes a client
+    useEffect(() => {
+        const handler = () => fetchClients();
+        window.addEventListener('opulentus:clients-changed', handler);
+        return () => window.removeEventListener('opulentus:clients-changed', handler);
+    }, []);
 
     // Hide sidebar on public shared links
     if (pathname.startsWith('/shared')) {

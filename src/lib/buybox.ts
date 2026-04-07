@@ -82,11 +82,11 @@ export async function loadClientBuyBox(id: string): Promise<BuyBoxCriteria | nul
 export async function loadAllClients(): Promise<BuyBoxCriteria[]> {
     try {
         const res = await fetch('/api/clients');
-        if (!res.ok) return getDefaultClientFallback();
+        if (!res.ok) return [];
         const clients = await res.json();
 
         if (!clients || clients.length === 0) {
-            return getDefaultClientFallback();
+            return [];
         }
 
         return clients.map((c: any) => ({
@@ -98,25 +98,8 @@ export async function loadAllClients(): Promise<BuyBoxCriteria[]> {
         } as BuyBoxCriteria));
     } catch (e) {
         console.error("Failed to parse stored clients", e);
-        return getDefaultClientFallback();
+        return [];
     }
-}
-
-function getDefaultClientFallback(): BuyBoxCriteria[] {
-    const defaultClient: BuyBoxCriteria = {
-        id: "ali-beydoun",
-        name: "Ali Beydoun",
-        propertyType: "Strip Center / Retail Plaza",
-        transactionType: "Buy",
-        location: "Wayne County",
-        priceMin: "",
-        priceMax: "5000000",
-        sizeMin: "",
-        sizeMax: "",
-        specialCriteria: "Value-add opportunities, power centers, or distressed plazas.",
-        portfolioHoldings: ""
-    };
-    return [defaultClient];
 }
 
 export async function loadPersonalBuyBox(): Promise<BuyBoxCriteria | null> {

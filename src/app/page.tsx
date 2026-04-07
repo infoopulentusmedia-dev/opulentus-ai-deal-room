@@ -170,6 +170,7 @@ export default function Home() {
                   };
                   setClientBuyBoxes(prev => [newBox, ...prev.filter(b => b.slug !== newBox.slug)]);
                   setCommandStatus({ message: result.message, type: 'success' });
+                  window.dispatchEvent(new Event('opulentus:clients-changed'));
 
                 } else if (result.intent === 'edit' && result.success) {
                   const client = result.client;
@@ -189,10 +190,12 @@ export default function Home() {
                     price: `${min} – ${max}`, icon
                   } : b));
                   setCommandStatus({ message: result.message, type: 'success' });
+                  window.dispatchEvent(new Event('opulentus:clients-changed'));
 
                 } else if (result.intent === 'delete' && result.success) {
                   setClientBuyBoxes(prev => prev.filter(b => b.name !== result.deletedName));
                   setCommandStatus({ message: result.message, type: 'success' });
+                  window.dispatchEvent(new Event('opulentus:clients-changed'));
 
                 } else if (result.intent === 'query' && result.success) {
                   const matchCount = result.recentMatches?.length || 0;
