@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { BuyBoxCriteria } from "@/lib/buybox";
 import MogulFactLoader from "@/components/MogulFactLoader";
+import ClientGate from "@/components/ClientGate";
+import { AnimatePresence } from "framer-motion";
 
 interface DailyDigestResponse {
     briefing: string;
@@ -17,6 +19,7 @@ function SharedPortfolioContent() {
     const [digest, setDigest] = useState<DailyDigestResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState("");
+    const [isUnlocked, setIsUnlocked] = useState<boolean | null>(null);
 
     useEffect(() => {
         const dataParam = searchParams.get('data');
@@ -32,6 +35,11 @@ function SharedPortfolioContent() {
             const jsonString = Buffer.from(decodedBase64, 'base64').toString('utf8');
             const parsedBox = JSON.parse(jsonString) as BuyBoxCriteria;
             setBuybox(parsedBox);
+            
+            // Check persistence
+            const access = localStorage.getItem(`opulentus_access_${parsedBox.id}`) === "true";
+            setIsUnlocked(access);
+
             generateDigest(parsedBox);
         } catch (e) {
             console.error(e);
@@ -256,6 +264,17 @@ function SharedPortfolioContent() {
                     </>
                 )}
             </main>
+
+            {/* Cinematic Authentication Gate */}
+            <AnimatePresence>
+                {isUnlocked === false && buybox && (
+                    <ClientGate 
+                        clientName={buybox.name.split(' ')[0]} 
+                        clientId={buybox.id} 
+                        onUnlock={() => setIsUnlocked(true)} 
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }
