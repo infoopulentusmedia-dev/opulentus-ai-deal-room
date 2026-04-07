@@ -29,7 +29,8 @@ export const defaultBuyBox: BuyBoxCriteria = {
     specialCriteria: ""
 };
 
-export async function saveClientBuyBox(criteria: BuyBoxCriteria): Promise<void> {
+// Returns the Supabase UUID of the saved client so callers can route correctly
+export async function saveClientBuyBox(criteria: BuyBoxCriteria): Promise<string | null> {
     try {
         // Extract email so it goes into the dedicated column, not inside buy_box_json
         const { email, ...buyBoxFields } = criteria;
@@ -37,13 +38,20 @@ export async function saveClientBuyBox(criteria: BuyBoxCriteria): Promise<void> 
         if (email !== undefined) {
             payload.email = email;
         }
-        await fetch('/api/clients', {
+        const res = await fetch('/api/clients', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
+        if (res.ok) {
+            const data = await res.json();
+            // Return the Supabase UUID so the caller can route with the real ID
+            return data?.client?.id ?? null;
+        }
+        return null;
     } catch (e) {
         console.error("Failed to sync client to Supabase:", e);
+        return null;
     }
 }
 
@@ -52,12 +60,17 @@ export async function loadClientBuyBox(id: string): Promise<BuyBoxCriteria | nul
         const res = await fetch('/api/clients');
         if (!res.ok) return null;
         const clients = await res.json();
-        const client = clients.find((c: any) => c.id === id);
+        // Match by Supabase UUID OR by the slug stored inside buy_box_json.id
+        const client = clients.find(
+            (c: any) => c.id === id || c.buy_box_json?.id === id
+        );
         if (client && client.buy_box_json) {
             return {
-                id: client.id,
+                // Spread buy_box_json first so the real Supabase UUID always wins
+                ...client.buy_box_json,
+                id: client.id,       // Always the Supabase UUID
                 name: client.name,
-                ...client.buy_box_json
+                email: client.email || '',
             } as BuyBoxCriteria;
         }
     } catch (e) {
@@ -77,10 +90,11 @@ export async function loadAllClients(): Promise<BuyBoxCriteria[]> {
         }
 
         return clients.map((c: any) => ({
-            id: c.id,
+            // Spread buy_box_json first, then override with authoritative DB fields
+            ...c.buy_box_json,
+            id: c.id,           // Always the Supabase UUID
             name: c.name,
             email: c.email || '',
-            ...c.buy_box_json
         } as BuyBoxCriteria));
     } catch (e) {
         console.error("Failed to parse stored clients", e);

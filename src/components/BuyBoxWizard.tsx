@@ -47,11 +47,13 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
     const handleSubmit = async () => {
         setIsSaving(true);
         try {
-            await saveClientBuyBox(formData);
+            // saveClientBuyBox now returns the real Supabase UUID
+            const savedUUID = await saveClientBuyBox(formData);
             if (onClientSaved) onClientSaved();
             onClose();
-            // Route to the daily updates page using the custom criteria
-            router.push(`/daily-updates?client=${formData.id}`);
+            // Always route with the Supabase UUID so loadClientBuyBox can find the record
+            const routeId = savedUUID || formData.id;
+            router.push(`/daily-updates?client=${routeId}`);
         } finally {
             setIsSaving(false);
         }
@@ -121,22 +123,6 @@ export default function BuyBoxWizard({ isOpen, onClose, initialData, isPersonal,
                                             className="w-full bg-[#171717] border border-[#242424] rounded-lg px-4 py-4 text-white text-lg focus:outline-none focus:border-[#404040]"
                                             autoFocus
                                         />
-                                        {formData.id && (
-                                            <p className="text-xs text-[#A3A3A3] mt-3 font-mono">
-                                                Internal ID: <span className="text-[#D4AF37]">{formData.id}</span>
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-mono text-[#7C7C7C] uppercase block mb-2">Client Email</label>
-                                        <input
-                                            type="email"
-                                            placeholder="e.g. ali@example.com"
-                                            value={formData.email || ""}
-                                            onChange={(e) => updateField("email", e.target.value)}
-                                            className="w-full bg-[#171717] border border-[#242424] rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-[#404040]"
-                                        />
-                                        <p className="text-xs text-[#7C7C7C] mt-2 font-mono">Daily deal blasts will be sent to this address</p>
                                     </div>
                                 </div>
                             )}
