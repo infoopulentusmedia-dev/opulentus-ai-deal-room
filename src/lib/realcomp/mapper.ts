@@ -27,7 +27,14 @@ export function isRealcompCompliant(property: any): boolean {
  * Maps a compliant Realcomp RESO Web API property to the internal ApifyPropertyListing schema.
  * Safely handles edge cases like missing square footage or prices.
  */
-export function mapRealcompProperty(property: any): ApifyPropertyListing {
+export function mapRealcompProperty(property: any): ApifyPropertyListing | null {
+    // CRITICAL: Skip properties without a ListingId — random IDs cause
+    // phantom duplicates on every scrape and can never be found again.
+    if (!property.ListingId) {
+        console.warn("[MLS Mapper] Skipping property with no ListingId:", property.UnparsedAddress || "unknown");
+        return null;
+    }
+
     // Safely parse square footage (edge case handling)
     let buildingSize: number | null = null;
     if (typeof property.BuildingAreaTotal === "number" && property.BuildingAreaTotal > 0) {
@@ -42,33 +49,38 @@ export function mapRealcompProperty(property: any): ApifyPropertyListing {
         propertyType = property.PropertyType;
     }
 
-    // Handle price 
+    // Handle price
     let price: number | null = null;
-    if (typeof property.ListPrice === "number") {
+    if (typeof property.ListPrice === "number" && isFinite(property.ListPrice)) {
         price = property.ListPrice;
     }
 
     // Placeholder image (RESO Web API usually requires a secondary /Media call if $expand=Media isn't used)
-    // We'll use a placeholder until we implement the deep media fetcher.
     const images: string[] = ["https://via.placeholder.com/800x600.png?text=Image+Not+Provided"];
+
+    // Safe address with fallback
+    const address = property.UnparsedAddress || property.StreetName || "Unknown Address";
+    const city = property.City || property.PostalCity || "";
+    const state = property.StateOrProvince || "MI";
+    const zipCode = property.PostalCode || "";
 
     return {
         platform: "mls",
-        sourceId: property.ListingId || `RC-${Math.random().toString(36).substring(7)}`,
-        propertyUrl: `https://www.zillow.com/homes/${encodeURIComponent((property.UnparsedAddress || '') + ' ' + (property.PostalCode || '')).trim()}_rb/`,
-        address: property.UnparsedAddress || "Unknown Address",
-        city: property.City || property.PostalCity || "Unknown City",
-        state: property.StateOrProvince || "MI",
-        zipCode: property.PostalCode || "",
-        price: price,
-        propertyType: propertyType,
+        sourceId: property.ListingId,
+        propertyUrl: `https://www.zillow.com/homes/${encodeURIComponent((address + ' ' + zipCode).trim())}_rb/`,
+        address,
+        city,
+        state,
+        zipCode,
+        price,
+        propertyType,
         buildingSizeSqft: buildingSize,
-        lotSizeAcres: property.LotSizeAcres || null,
-        capRate: null, // MLS typically doesn't provide cap rate directly
+        lotSizeAcres: typeof property.LotSizeAcres === 'number' ? property.LotSizeAcres : null,
+        capRate: null,
         description: property.PublicRemarks || "No description provided.",
-        images: images,
+        images,
         brokerName: property.ListAgentFullName || "Realcomp IDX Agent",
-        daysOnPlatform: property.DaysOnMarket || 0,
+        daysOnPlatform: typeof property.DaysOnMarket === 'number' ? property.DaysOnMarket : 0,
         _ghostListingData: null
     };
 }

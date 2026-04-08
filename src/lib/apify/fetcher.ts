@@ -164,15 +164,23 @@ export async function getLoopNetFeed(): Promise<ApifyPropertyListing[]> {
 
     for (const item of loopNetData) {
         if (!item || !item.propertyId) continue;
+
+        // Safe address: avoid "undefined, undefined" when city/state are missing
+        let lnAddress = item.address || "";
+        if (!lnAddress) {
+            const parts = [item.city, item.state].filter(Boolean);
+            lnAddress = parts.length > 0 ? parts.join(", ") : "Unknown Address";
+        }
+
         listings.push({
             platform: "loopnet",
             sourceId: `LN-${item.propertyId}`,
             propertyUrl: item.listingUrl || `https://www.loopnet.com/Listing/${item.propertyId}`,
-            address: item.address || `${item.city}, ${item.state}`,
+            address: lnAddress,
             city: item.city || "",
             state: item.state || "",
             zipCode: item.zip || "",
-            price: item.priceNumeric || null,
+            price: typeof item.priceNumeric === 'number' ? item.priceNumeric : null,
             propertyType: item.propertyTypeDetailed || item.propertyType || "Commercial",
             buildingSizeSqft: item.buildingSize || item.squareFootage || null,
             lotSizeAcres: null,
@@ -235,10 +243,11 @@ export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "a
 
     const listings: ApifyPropertyListing[] = [];
 
-    // Normalize Realcomp
+    // Normalize Realcomp (filter nulls: properties without ListingId are skipped)
     const realcompListings: ApifyPropertyListing[] = (rcRawData?.value || [])
         .filter(isRealcompCompliant)
-        .map(mapRealcompProperty);
+        .map(mapRealcompProperty)
+        .filter((p): p is ApifyPropertyListing => p !== null);
     listings.push(...realcompListings);
 
     // Normalize Crexi — field names confirmed from live Apify actor output
@@ -285,15 +294,22 @@ export async function getLiveApifyFeed(source?: "crexi" | "loopnet" | "mls" | "a
     for (const item of loopNetData) {
         if (!item || !item.propertyId) continue;
 
+        // Safe address: avoid "undefined, undefined" when city/state are missing
+        let lnAddr = item.address || "";
+        if (!lnAddr) {
+            const parts = [item.city, item.state].filter(Boolean);
+            lnAddr = parts.length > 0 ? parts.join(", ") : "Unknown Address";
+        }
+
         listings.push({
             platform: "loopnet",
             sourceId: `LN-${item.propertyId}`,
             propertyUrl: item.listingUrl || `https://www.loopnet.com/Listing/${item.propertyId}`,
-            address: item.address || `${item.city}, ${item.state}`,
+            address: lnAddr,
             city: item.city || "",
             state: item.state || "",
             zipCode: item.zip || "",
-            price: item.priceNumeric || null,
+            price: typeof item.priceNumeric === 'number' ? item.priceNumeric : null,
             propertyType: item.propertyTypeDetailed || item.propertyType || "Commercial",
             buildingSizeSqft: item.buildingSize || item.squareFootage || null,
             lotSizeAcres: null,

@@ -10,7 +10,15 @@ export interface DailyScanRecord {
 // Memory Cache for Vercel Serverless (Digests only for now)
 let memoryDigest: Record<string, any> = {};
 
-// Read all historical scans from Supabase
+// ─────────────────────────────────────────────────────────────────
+// READ HELPERS
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Read all scans — FIXED: Single batched query instead of N+1.
+ * Previously did one SELECT per scan row; now collects all property IDs
+ * across all scans, fetches them in one query, then re-distributes.
+ */
 export async function readAllScans(): Promise<DailyScanRecord[]> {
     try {
         const { data: scans, error } = await supabaseAdmin
@@ -18,62 +26,149 @@ export async function readAllScans(): Promise<DailyScanRecord[]> {
             .select('*')
             .order('inserted_at', { ascending: false });
 
-        if (error || !scans) {
-            console.error("Supabase fetch error:", error);
+        if (error || !scans || scans.length === 0) {
+            if (error) console.error("Supabase fetch error:", error);
             return [];
         }
 
-        // We need to fetch the actual properties for these scans
-        // But for performance, if we just want the list of dates, we could optimize this.
-        // For now we'll just reconstruct the schema to match the frontend expectations.
-        const records: DailyScanRecord[] = [];
-
+        // Collect ALL unique property IDs across every scan
+        const allIds = new Set<string>();
         for (const scan of scans) {
-            // Fetch properties for this scan
-            const { data: props } = await supabaseAdmin
-                .from('properties')
-                .select('property_data_json')
-                .in('id', scan.property_ids);
-
-            records.push({
-                date: scan.date,
-                timestamp: new Date(scan.inserted_at).getTime(),
-                properties: props ? props.map((p: any) => p.property_data_json) : []
-            });
+            if (Array.isArray(scan.property_ids)) {
+                for (const id of scan.property_ids) allIds.add(id);
+            }
         }
 
-        return records;
+        if (allIds.size === 0) return scans.map(s => ({
+            date: s.date,
+            timestamp: new Date(s.inserted_at).getTime(),
+            properties: [],
+        }));
+
+        // Single batched fetch for ALL properties (chunk in 500s for Supabase .in() limit)
+        const propertyMap = new Map<string, any>();
+        const idArray = Array.from(allIds);
+        for (let i = 0; i < idArray.length; i += 500) {
+            const chunk = idArray.slice(i, i + 500);
+            const { data: props } = await supabaseAdmin
+                .from('properties')
+                .select('id, property_data_json')
+                .in('id', chunk);
+            if (props) {
+                for (const p of props) propertyMap.set(p.id, p.property_data_json);
+            }
+        }
+
+        // Re-distribute into per-scan records
+        return scans.map(scan => ({
+            date: scan.date,
+            timestamp: new Date(scan.inserted_at).getTime(),
+            properties: (scan.property_ids || [])
+                .map((id: string) => propertyMap.get(id))
+                .filter(Boolean),
+        }));
     } catch (e) {
         console.error("Failed to read DB:", e);
         return [];
     }
 }
 
-// Get the scan for today, or the most recent day available
+// Get the most recent scan — now O(1) query instead of loading all scans
 export async function getLatestScan(): Promise<DailyScanRecord | null> {
-    const scans = await readAllScans();
-    if (scans.length === 0) return null;
+    try {
+        const { data: scan, error } = await supabaseAdmin
+            .from('daily_scans')
+            .select('*')
+            .order('date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-    // Sort by timestamp descending
-    scans.sort((a, b) => b.timestamp - a.timestamp);
-    return scans[0];
+        if (error || !scan) return null;
+
+        const ids = Array.isArray(scan.property_ids) ? scan.property_ids : [];
+        if (ids.length === 0) {
+            return { date: scan.date, timestamp: new Date(scan.inserted_at).getTime(), properties: [] };
+        }
+
+        const allProps: any[] = [];
+        for (let i = 0; i < ids.length; i += 500) {
+            const chunk = ids.slice(i, i + 500);
+            const { data: props } = await supabaseAdmin
+                .from('properties')
+                .select('property_data_json')
+                .in('id', chunk);
+            if (props) allProps.push(...props.map((p: any) => p.property_data_json).filter(Boolean));
+        }
+
+        return { date: scan.date, timestamp: new Date(scan.inserted_at).getTime(), properties: allProps };
+    } catch (e) {
+        console.error("Failed to get latest scan:", e);
+        return null;
+    }
 }
 
-// Save a new scan to Supabase Postgres
+// ─────────────────────────────────────────────────────────────────
+// SAVE — Merges property_ids when cron runs multiple times per day
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Cross-platform dedup: if the same physical property appears on both
+ * Crexi and LoopNet (same normalized address+zip), keep the one with
+ * more data (has price > no price, has description > empty, etc.).
+ */
+function deduplicateCrossPlatform(properties: ApifyPropertyListing[]): ApifyPropertyListing[] {
+    const normalize = (addr: string) => (addr || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+    const byAddress = new Map<string, ApifyPropertyListing>();
+
+    for (const p of properties) {
+        if (!p.address || p.address === "Unknown Address") {
+            // Can't dedup without an address — keep it
+            byAddress.set(p.sourceId, p);
+            continue;
+        }
+        const key = normalize(p.address) + (p.zipCode || '');
+        const existing = byAddress.get(key);
+        if (!existing) {
+            byAddress.set(key, p);
+        } else {
+            // Pick the richer listing: prefer one with price, then description, then more images
+            const scoreA = (existing.price ? 3 : 0) + (existing.description?.length || 0 > 20 ? 2 : 0) + (existing.images?.length || 0);
+            const scoreB = (p.price ? 3 : 0) + (p.description?.length || 0 > 20 ? 2 : 0) + (p.images?.length || 0);
+            if (scoreB > scoreA) {
+                byAddress.set(key, p);
+            }
+            // else keep existing
+        }
+    }
+    const deduped = Array.from(byAddress.values());
+    if (deduped.length < properties.length) {
+        console.log(`[Dedup] Removed ${properties.length - deduped.length} cross-platform duplicates.`);
+    }
+    return deduped;
+}
+
 export async function saveDailyScan(properties: ApifyPropertyListing[]): Promise<DailyScanRecord> {
     const today = new Date().toISOString().split('T')[0];
+
+    // GUARD: Don't save an empty scan — it would overwrite today's good data
+    if (!properties || properties.length === 0) {
+        console.warn("[saveDailyScan] Refusing to save empty scan — preserving existing data.");
+        return { date: today, timestamp: Date.now(), properties: [] };
+    }
+
+    // Cross-platform dedup: same building on Crexi + LoopNet → keep the richer listing
+    properties = deduplicateCrossPlatform(properties);
 
     // 1. Upsert all properties into the `properties` table
     const propertyRecords = properties.map(p => ({
         id: p.sourceId,
         platform: p.platform,
-        address: p.address,
-        price: typeof p.price === 'number' ? p.price : null,
-        property_type: p.propertyType,
+        address: p.address || "Unknown Address",
+        price: typeof p.price === 'number' && isFinite(p.price) ? p.price : null,
+        property_type: p.propertyType || "Commercial",
         property_data_json: p
     }));
 
-    // Upsert properties (ignore if exists, or update)
     const { error: propErr } = await supabaseAdmin
         .from('properties')
         .upsert(propertyRecords, { onConflict: 'id' });
@@ -82,14 +177,23 @@ export async function saveDailyScan(properties: ApifyPropertyListing[]): Promise
         console.error("Failed to upsert properties:", propErr);
     }
 
-    // 2. Log the daily scan with the array of property IDs
-    const propertyIds = properties.map(p => p.sourceId);
+    // 2. MERGE today's property IDs with any existing ones (don't overwrite)
+    const newIds = properties.map(p => p.sourceId);
+
+    const { data: existingScan } = await supabaseAdmin
+        .from('daily_scans')
+        .select('property_ids')
+        .eq('date', today)
+        .maybeSingle();
+
+    const existingIds: string[] = existingScan?.property_ids || [];
+    const mergedIds = Array.from(new Set([...existingIds, ...newIds]));
 
     const { error: scanErr } = await supabaseAdmin
         .from('daily_scans')
         .upsert({
             date: today,
-            property_ids: propertyIds,
+            property_ids: mergedIds,
             inserted_at: new Date().toISOString()
         }, { onConflict: 'date' });
 
@@ -105,8 +209,77 @@ export async function saveDailyScan(properties: ApifyPropertyListing[]): Promise
 }
 
 // ─────────────────────────────────────────────────────────────────
+// 24-HOUR RETENTION CLEANUP
+// Deletes scans older than 1 day and their orphaned properties.
+// Called at the end of each daily scrape after new data is saved.
+// ─────────────────────────────────────────────────────────────────
+
+export async function cleanupOldData(): Promise<{ deletedScans: number; deletedProperties: number }> {
+    const today = new Date().toISOString().split('T')[0];
+    let deletedScans = 0;
+    let deletedProperties = 0;
+
+    try {
+        // 1. Find today's property IDs (the ones we KEEP)
+        const { data: todayScan } = await supabaseAdmin
+            .from('daily_scans')
+            .select('property_ids')
+            .eq('date', today)
+            .maybeSingle();
+
+        const keepIds = new Set<string>(todayScan?.property_ids || []);
+
+        // 2. Find all old scans (anything before today)
+        const { data: oldScans } = await supabaseAdmin
+            .from('daily_scans')
+            .select('date, property_ids')
+            .lt('date', today);
+
+        if (oldScans && oldScans.length > 0) {
+            // Collect all property IDs from old scans that are NOT in today's scan
+            const orphanIds: string[] = [];
+            for (const scan of oldScans) {
+                if (Array.isArray(scan.property_ids)) {
+                    for (const id of scan.property_ids) {
+                        if (!keepIds.has(id)) orphanIds.push(id);
+                    }
+                }
+            }
+
+            // 3. Delete orphaned properties (cascade deletes ai_analyses and deal_matches)
+            if (orphanIds.length > 0) {
+                const uniqueOrphans = Array.from(new Set(orphanIds));
+                for (let i = 0; i < uniqueOrphans.length; i += 500) {
+                    const chunk = uniqueOrphans.slice(i, i + 500);
+                    const { error, count } = await supabaseAdmin
+                        .from('properties')
+                        .delete()
+                        .in('id', chunk);
+                    if (error) console.error("Failed to delete orphan properties:", error);
+                    else deletedProperties += (count || chunk.length);
+                }
+            }
+
+            // 4. Delete old daily_scans rows
+            const { error, count } = await supabaseAdmin
+                .from('daily_scans')
+                .delete()
+                .lt('date', today);
+            if (error) console.error("Failed to delete old scans:", error);
+            else deletedScans = count || oldScans.length;
+        }
+
+        console.log(`[Cleanup] Deleted ${deletedScans} old scans, ${deletedProperties} orphaned properties. Kept ${keepIds.size} active properties.`);
+    } catch (e) {
+        console.error("[Cleanup] Failed:", e);
+    }
+
+    return { deletedScans, deletedProperties };
+}
+
+// ─────────────────────────────────────────────────────────────────
 // AI ANALYSIS CACHE (Supabase Postgres)
-// Saves Gemini AI token costs by preventing re-analysis of unchanged properties
+// Saves AI token costs by preventing re-analysis of unchanged properties
 // ─────────────────────────────────────────────────────────────────
 
 export interface CachedAnalysis {

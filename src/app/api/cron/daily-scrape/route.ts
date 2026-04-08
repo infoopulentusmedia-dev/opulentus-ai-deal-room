@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCrexiFeed, getLoopNetFeed } from "@/lib/apify/fetcher";
-import { saveDailyScan } from "@/lib/db";
+import { saveDailyScan, cleanupOldData } from "@/lib/db";
 import { ApifyPropertyListing } from "@/lib/apify/mockFeed";
 import { fetchRealCompProperties } from "@/lib/realcomp/api";
 import { isRealcompCompliant, mapRealcompProperty } from "@/lib/realcomp/mapper";
@@ -24,7 +24,8 @@ export async function GET(req: Request) {
 
         const realcompListings: ApifyPropertyListing[] = (rcRawData.value || [])
             .filter(isRealcompCompliant)
-            .map(mapRealcompProperty);
+            .map(mapRealcompProperty)
+            .filter((p): p is ApifyPropertyListing => p !== null);
 
         // Combine all arrays
         const allListings = [...crexiData, ...loopnetData, ...realcompListings];
@@ -70,6 +71,10 @@ export async function GET(req: Request) {
             console.warn("[Cron] ZERO properties scraped — skipping brief generation to preserve existing briefs.");
         }
 
+        // 24-hour retention: delete yesterday's scans + orphaned properties
+        const cleanup = await cleanupOldData();
+        console.log(`[Cron] Cleanup complete: ${cleanup.deletedScans} old scans, ${cleanup.deletedProperties} orphaned properties removed.`);
+
         return NextResponse.json({
             success: true,
             message: `Locked in ${finalListings.length} properties.`,
@@ -78,7 +83,8 @@ export async function GET(req: Request) {
                 crexi: crexiData.length,
                 loopnet: loopnetData.length,
                 realcomp: realcompListings.length
-            }
+            },
+            cleanup
         });
 
     } catch (err: any) {
