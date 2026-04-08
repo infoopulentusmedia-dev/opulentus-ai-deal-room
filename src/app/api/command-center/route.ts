@@ -1,117 +1,271 @@
 import { NextResponse } from 'next/server';
-import { generateAnalysis } from "@/lib/gemini/client";
 import { supabaseAdmin } from "@/lib/supabase";
 
+/**
+ * COMMAND CENTER — Fully deterministic intent routing + parameter extraction.
+ * Zero AI calls. Regex-based parsing handles add/edit/delete/query/blast/search.
+ */
+
 // ═══════════════════════════════════════
-// STEP 1: INTENT CLASSIFICATION PROMPT
+// INTENT CLASSIFICATION — Pure keyword matching
 // ═══════════════════════════════════════
-const INTENT_ROUTER = `You are the Opulentus Command Center Router.
-Your ONLY job is to classify a broker's command into exactly one intent and extract the relevant parameters.
+function classifyIntent(prompt: string): { intent: string; clientName: string; searchQuery: string } {
+    const lower = prompt.toLowerCase().trim();
 
-INTENTS:
-1. "add" — The user wants to ADD or CREATE a new client. Triggers: "add", "lock in", "new client", "sign up", "onboard", or any sentence describing a new person with property criteria AND their name.
-2. "edit" — The user wants to UPDATE or CHANGE an existing client's details. Triggers: "update", "change", "modify", "edit", "set", "switch", "adjust", "bump", "raise", "lower".
-3. "delete" — The user wants to REMOVE or DELETE an existing client. Triggers: "remove", "delete", "drop", "kick", "take off", "deactivate".
-4. "query" — The user wants to SEE or CHECK an existing client's status or matched deals. Triggers: "show me [client]'s", "what did [client] get", "check [client]", "status for", "deals for", "matches for".
-5. "blast" — The user wants to TRIGGER the daily email blast immediately. Triggers: "send blast", "trigger blast", "fire the email", "dispatch", "push the email", "send the daily".
-6. "search" — The user wants to SEARCH for properties or deals in the MLS database. Triggers: "find", "search", "look for", "any", "properties", "listings", "deals", "foreclosures", "distressed", or any sentence describing property criteria WITHOUT mentioning a specific person to add/edit/remove. This is the DEFAULT if the command doesn't clearly match intents 1-5.
+    // BLAST — trigger daily email
+    if (/\b(send\s*(the\s*)?blast|trigger\s*blast|fire\s*(the\s*)?email|dispatch|push\s*(the\s*)?email|send\s*(the\s*)?daily)\b/.test(lower)) {
+        return { intent: "blast", clientName: "", searchQuery: "" };
+    }
 
-CRITICAL DISTINCTION:
-- "Add Fadi, warehouses in Macomb" = "add" (has a person's name + onboarding language)
-- "Find warehouses in Macomb" = "search" (searching for properties, no person being added)
-- "Distressed multifamilies in Wayne County" = "search" (property search query)
-- "Show me Fadi's deals" = "query" (checking a specific person's info)
+    // DELETE — remove a client
+    if (/\b(remove|delete|drop|kick|take\s*off|deactivate)\b/.test(lower)) {
+        const name = extractNameAfterKeyword(lower, /(remove|delete|drop|kick|take\s*off|deactivate)/);
+        return { intent: "delete", clientName: name, searchQuery: "" };
+    }
 
-OUTPUT STRICTLY VALID JSON:
-{
-  "intent": "add" | "edit" | "delete" | "query" | "blast" | "search",
-  "clientName": "Name of the client referenced (or empty if blast/search)",
-  "searchQuery": "The property search query text (only for search intent, else empty)",
-  "rawCommand": "The full original command repeated back"
+    // QUERY — check a client's status/deals
+    if (/\b(show\s*me|what\s*did|check|status\s*for|deals\s*for|matches\s*for|how\s*is|how's)\b/.test(lower)) {
+        const name = extractNameFromQuery(lower);
+        return { intent: "query", clientName: name, searchQuery: "" };
+    }
+
+    // EDIT — update an existing client
+    if (/\b(update|change|modify|edit|set|switch|adjust|bump|raise|lower)\b/.test(lower)) {
+        const name = extractNameFromEdit(lower);
+        return { intent: "edit", clientName: name, searchQuery: "" };
+    }
+
+    // ADD — create a new client (must have a person's name + intent language)
+    if (/\b(add|lock\s*in|new\s*client|sign\s*up|onboard)\b/.test(lower)) {
+        return { intent: "add", clientName: "", searchQuery: "" };
+    }
+
+    // Check if it looks like adding (has a person's name + property criteria but no search keywords)
+    // Patterns like "Ali, strip centers, Wayne County, $1-5M"
+    if (/^[A-Z][a-z]+(\s[A-Z][a-z]+)?,\s/.test(prompt) && !/(find|search|look\s*for|any\b|properties|listings)/.test(lower)) {
+        return { intent: "add", clientName: "", searchQuery: "" };
+    }
+
+    // SEARCH — default fallback
+    return { intent: "search", clientName: "", searchQuery: prompt };
 }
-`;
+
+function extractNameAfterKeyword(text: string, pattern: RegExp): string {
+    const match = text.match(new RegExp(pattern.source + "\\s+(.+?)(?:\\s*from|\\s*$)", "i"));
+    if (match) return cleanName(match[1]);
+    // Try extracting anything after the keyword
+    const parts = text.split(pattern);
+    if (parts.length > 1) return cleanName(parts[1].trim());
+    return "";
+}
+
+function extractNameFromQuery(text: string): string {
+    // "show me Ali's deals" → "Ali"
+    const possessive = text.match(/(\w+(?:\s+\w+)?)'s/i);
+    if (possessive) return cleanName(possessive[1]);
+    // "deals for Ali Beydoun" → "Ali Beydoun"
+    const forMatch = text.match(/(?:for|about)\s+(.+?)(?:\s*$)/i);
+    if (forMatch) return cleanName(forMatch[1]);
+    // "check Ali" → "Ali"
+    const checkMatch = text.match(/(?:show me|check|status|deals for|matches for|how is|how's)\s+(.+?)(?:\s*$)/i);
+    if (checkMatch) return cleanName(checkMatch[1]);
+    return "";
+}
+
+function extractNameFromEdit(text: string): string {
+    // "update Ali's budget" → "Ali"
+    const possessive = text.match(/(\w+(?:\s+\w+)?)'s/i);
+    if (possessive) return cleanName(possessive[1]);
+    // "edit Ali Beydoun" → "Ali Beydoun"
+    const afterKeyword = text.match(/(?:update|change|modify|edit|adjust)\s+(.+?)(?:'s|\s+to\b|\s+price|\s+budget|\s+location|\s+type|\s*$)/i);
+    if (afterKeyword) return cleanName(afterKeyword[1]);
+    return "";
+}
+
+function cleanName(name: string): string {
+    return name
+        .replace(/\b(client|from|the|deals?|status|matches?|his|her|their)\b/gi, "")
+        .replace(/['']/g, "")
+        .trim();
+}
 
 // ═══════════════════════════════════════
-// STEP 2: ADD CLIENT — FULL NLP PARSER
+// DETERMINISTIC NLP — Regex-based parameter extraction
 // ═══════════════════════════════════════
-const ADD_CLIENT_PROMPT = `You are the Opulentus Master Router Client Intake AI.
-Your SOLE job is to extract a real estate client's "Buy Box" from a natural language command.
 
-═══════════════════════════════════════
-RULE 1 — NAME EXTRACTION
-═══════════════════════════════════════
-- Extract the client's full name exactly as spoken.
-- Handle first-name-only ("Fadi"), hyphenated ("Mary-Jane"), Arabic ("Hussein Al-Zeitoun"), compound ("Van Der Berg").
-- If the name is buried mid-sentence ("I got a new buyer named Mike Torres"), still extract it.
-- If absolutely no name exists, use "Unknown Client".
+const PROPERTY_TYPE_MAP: Record<string, string> = {
+    "strip": "Strip Center / Retail Plaza", "retail": "Strip Center / Retail Plaza", "plaza": "Strip Center / Retail Plaza", "shopping": "Strip Center / Retail Plaza",
+    "warehouse": "Warehouse / Industrial", "industrial": "Warehouse / Industrial", "flex": "Warehouse / Industrial", "distribution": "Warehouse / Industrial", "logistics": "Warehouse / Industrial",
+    "multifamily": "Multifamily", "multi-family": "Multifamily", "apartment": "Multifamily", "duplex": "Multifamily", "triplex": "Multifamily", "fourplex": "Multifamily",
+    "mechanic": "Mechanic / Dealership", "dealership": "Mechanic / Dealership", "auto": "Mechanic / Dealership", "car wash": "Mechanic / Dealership", "gas station": "Mechanic / Dealership",
+    "residential": "Residential", "house": "Residential", "home": "Residential", "single family": "Residential", "sfr": "Residential",
+    "office": "Commercial", "commercial": "Commercial", "mixed": "Commercial", "medical": "Commercial", "restaurant": "Commercial", "hotel": "Commercial", "hospitality": "Commercial",
+    "land": "Commercial", "lot": "Commercial", "vacant": "Commercial",
+};
 
-═══════════════════════════════════════
-RULE 2 — EMAIL EXTRACTION
-═══════════════════════════════════════
-- Extract any email address found anywhere in the text. Normalize spacing ("john @ kw . com" → "john@kw.com").
-- If no email exists, return an empty string "".
+function parsePrice(raw: string): string {
+    if (!raw) return "";
+    const cleaned = raw.replace(/[$,\s]/g, "").toLowerCase();
+    const mMatch = cleaned.match(/([\d.]+)\s*m/);
+    if (mMatch) return String(Math.round(parseFloat(mMatch[1]) * 1_000_000));
+    const kMatch = cleaned.match(/([\d.]+)\s*k/);
+    if (kMatch) return String(Math.round(parseFloat(kMatch[1]) * 1_000));
+    const numMatch = cleaned.match(/[\d.]+/);
+    if (numMatch) return String(Math.round(parseFloat(numMatch[0])));
+    return "";
+}
 
-═══════════════════════════════════════
-RULE 3 — PROPERTY TYPE MAPPING
-═══════════════════════════════════════
-Map the requested asset to EXACTLY ONE of these strings:
-- "Strip Center / Retail Plaza" (retail, strip center, mall, plaza)
-- "Warehouse / Industrial" (warehouse, industrial, distro, manufacturing)
-- "Multifamily" (multifamily, apartments, duplex, complex)
-- "Mechanic / Dealership" (mechanic, auto repair, dealership)
-- "Residential" (house, home, single family, condo)
-- "Commercial" (office, gas station, land — DEFAULT if vague)
+function parseSize(raw: string): string {
+    if (!raw) return "";
+    const cleaned = raw.replace(/[,\s]/g, "").toLowerCase();
+    const kMatch = cleaned.match(/([\d.]+)\s*k/);
+    if (kMatch) return String(Math.round(parseFloat(kMatch[1]) * 1_000));
+    const numMatch = cleaned.match(/[\d.]+/);
+    if (numMatch) return String(Math.round(parseFloat(numMatch[0])));
+    return "";
+}
 
-═══════════════════════════════════════
-RULE 4 — TRANSACTION TYPE
-═══════════════════════════════════════
-Determine the transaction intent and return EXACTLY ONE of:
-- "Buy" — client wants to purchase (DEFAULT if not specified)
-- "For Lease" — client wants to lease or rent
-- "Auction" — explicitly mentions auction
+function detectPropertyType(text: string): string {
+    const lower = text.toLowerCase();
+    for (const [keyword, mapped] of Object.entries(PROPERTY_TYPE_MAP)) {
+        if (lower.includes(keyword)) return mapped;
+    }
+    return "Commercial";
+}
 
-═══════════════════════════════════════
-RULE 5 — PRICE NORMALIZATION
-═══════════════════════════════════════
-Convert ALL price references to raw integer strings:
-- "$5M", "5 mil", "5 million" → "5000000"
-- "$500k", "500 thousand" → "500000"
-- "between $1M and $4M" → priceMin: "1000000", priceMax: "4000000"
-- "under $5M", "max 5 million" → priceMax: "5000000"
-- "over $1M", "starting at $1M" → priceMin: "1000000"
-- If NO price is mentioned, return "" for both.
+function detectTransactionType(text: string): string {
+    const lower = text.toLowerCase();
+    if (/\b(lease|leasing|for lease|nnn|triple net)\b/.test(lower)) return "For Lease";
+    if (/\b(auction)\b/.test(lower)) return "Auction";
+    return "Buy";
+}
 
-═══════════════════════════════════════
-RULE 6 — LOCATION, SIZE & SPECIAL
-═══════════════════════════════════════
-- Extract geography (Counties, cities, zips). Multiple OK. None → "Any Location".
-- "40k sqft minimum" → sizeMin: "40000"
-- Distressed, cap rate, constraints → specialCriteria. None → "".
+const MI_COUNTIES = ["wayne", "oakland", "macomb", "washtenaw", "livingston", "genesee", "kent", "ingham"];
+const MI_CITIES = ["detroit", "dearborn", "livonia", "canton", "troy", "southfield", "ann arbor", "farmington", "novi", "warren", "sterling heights", "rochester", "pontiac", "royal oak", "westland", "garden city", "inkster", "taylor", "redford", "allen park"];
 
-OUTPUT STRICTLY VALID JSON:
-{ "name":"","email":"","propertyType":"","transactionType":"Buy","location":"","priceMin":"","priceMax":"","sizeMin":"","sizeMax":"","specialCriteria":"" }
-`;
+function detectLocation(text: string): string {
+    const lower = text.toLowerCase();
+    // Check counties
+    for (const county of MI_COUNTIES) {
+        if (lower.includes(county + " county") || lower.includes(county)) {
+            return county.charAt(0).toUpperCase() + county.slice(1) + " County";
+        }
+    }
+    // Check cities
+    for (const city of MI_CITIES) {
+        if (lower.includes(city)) {
+            return city.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        }
+    }
+    // Check metro area
+    if (/\b(metro detroit|southeast michigan|se michigan|tri-county|tri county)\b/.test(lower)) {
+        return "Metro Detroit";
+    }
+    // Fallback: grab anything after "in" or after a comma that looks like a location
+    const inMatch = text.match(/\bin\s+([A-Z][a-zA-Z\s]+?)(?:,|\s*$|\s*\d)/);
+    if (inMatch) return inMatch[1].trim();
+    return "";
+}
 
-// ═══════════════════════════════════════
-// STEP 3: EDIT CLIENT — FIELD EXTRACTOR
-// ═══════════════════════════════════════
-const EDIT_CLIENT_PROMPT = `You are the Opulentus Client Editor AI.
-The broker wants to update an existing client's Buy Box based on conversational input.
+function parseBuyBoxFromText(text: string): {
+    name: string; email: string; propertyType: string; transactionType: string;
+    location: string; priceMin: string; priceMax: string; sizeMin: string; sizeMax: string; specialCriteria: string;
+} {
+    // Extract name: first capitalized word(s) before a comma, or after "add"
+    let name = "";
+    const addMatch = text.match(/(?:add|lock\s*in|new\s*client|onboard)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+    const commaLeadMatch = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*,/);
+    if (addMatch) name = addMatch[1];
+    else if (commaLeadMatch) name = commaLeadMatch[1];
 
-RULES FOR EXTRACTION:
-1. "clientName": The name of the client being edited (REQUIRED). If the broker says "Update Ali's budget", clientName is "Ali".
-2. Only include fields the user explicitly mentions changing. Do NOT guess values for unmentioned fields.
-3. PRICE RULES: Convert "$3M" or "3 mil" to "3000000", and "$500k" to "500000". "Raise budget to $5M" means priceMax="5000000". "Looking over $1M" means priceMin="1000000".
-4. PROPERTY TYPE RULES: Map to ONLY "Strip Center / Retail Plaza", "Warehouse / Industrial", "Multifamily", "Mechanic / Dealership", "Residential", or "Commercial".
-5. EMAIL RULES: Extract standard emails.
-6. LOCATION: Exact phrases (e.g. "Wayne County", "Detroit").
-7. SIZE: "Expand to 50k sqft" -> sizeMax="50000". "At least 10k sqft" -> sizeMin="10000".
+    // Extract email
+    const emailMatch = text.match(/[\w.+-]+@[\w.-]+\.\w+/);
+    const email = emailMatch ? emailMatch[0] : "";
 
-OUTPUT STRICTLY VALID JSON (include ONLY changed fields plus clientName):
-{ "clientName":"Ali Beydoun", "priceMax":"3000000" }
-or
-{ "clientName":"Fadi", "propertyType":"Warehouse / Industrial", "location":"Oakland County" }
-`;
+    // Price range: "$1-5M", "$1M-$5M", "$500k to $2M", "between $1M and $5M"
+    let priceMin = "", priceMax = "";
+    const rangeMatch = text.match(/\$\s*([\d.]+[mkMK]?)\s*[-–to]+\s*\$?\s*([\d.]+[mkMK]?)/);
+    if (rangeMatch) {
+        priceMin = parsePrice(rangeMatch[1]);
+        priceMax = parsePrice(rangeMatch[2]);
+    } else {
+        const singlePrice = text.match(/\$\s*([\d.]+[mkMK]?)\s*(?:max|budget|cap)?/);
+        if (singlePrice) priceMax = parsePrice(singlePrice[1]);
+    }
+
+    // Size range: "5k-20k sqft", "5,000 - 20,000 sf"
+    let sizeMin = "", sizeMax = "";
+    const sizeRange = text.match(/([\d,.]+[kK]?)\s*[-–to]+\s*([\d,.]+[kK]?)\s*(?:sq\s*ft|sf|square)/i);
+    if (sizeRange) {
+        sizeMin = parseSize(sizeRange[1]);
+        sizeMax = parseSize(sizeRange[2]);
+    }
+
+    // Special criteria: anything after "special:", "criteria:", "notes:", or "must have"
+    let specialCriteria = "";
+    const specialMatch = text.match(/(?:special|criteria|notes|must\s*have|requirement)[:\s]+(.+?)(?:$)/i);
+    if (specialMatch) specialCriteria = specialMatch[1].trim();
+
+    return {
+        name,
+        email,
+        propertyType: detectPropertyType(text),
+        transactionType: detectTransactionType(text),
+        location: detectLocation(text),
+        priceMin,
+        priceMax,
+        sizeMin,
+        sizeMax,
+        specialCriteria,
+    };
+}
+
+function parseEditFromText(text: string, existingClientName: string): Record<string, string> {
+    const edits: Record<string, string> = {};
+    edits.clientName = existingClientName;
+
+    const lower = text.toLowerCase();
+
+    // Property type change
+    const typeMatch = lower.match(/(?:type|to|switch\s*to|change\s*to)\s+(strip|retail|warehouse|industrial|multifamily|apartment|office|mechanic|auto|residential|commercial|land)/i);
+    if (typeMatch) edits.propertyType = detectPropertyType(typeMatch[1]);
+
+    // Location change
+    const locMatch = text.match(/(?:location|area|zone|move\s*to|switch\s*to)\s+([A-Z][a-zA-Z\s]+?)(?:\s*,|\s*$)/);
+    if (locMatch) edits.location = locMatch[1].trim();
+    else {
+        const detectedLoc = detectLocation(text.replace(new RegExp(existingClientName, "gi"), ""));
+        if (detectedLoc) edits.location = detectedLoc;
+    }
+
+    // Price changes: "budget to $3M", "max $5M", "raise price to $2M", "lower min to $500k"
+    const maxMatch = text.match(/(?:max|budget|cap|price\s*max|raise.*?to|bump.*?to)\s*\$?\s*([\d.]+[mkMK]?)/i);
+    if (maxMatch) edits.priceMax = parsePrice(maxMatch[1]);
+    const minMatch = text.match(/(?:min|floor|price\s*min|lower.*?to)\s*\$?\s*([\d.]+[mkMK]?)/i);
+    if (minMatch) edits.priceMin = parsePrice(minMatch[1]);
+
+    // If just a single price mentioned with "to", treat as priceMax
+    if (!edits.priceMax && !edits.priceMin) {
+        const genericPrice = text.match(/(?:to|at)\s+\$\s*([\d.]+[mkMK]?)/i);
+        if (genericPrice) edits.priceMax = parsePrice(genericPrice[1]);
+    }
+
+    // Size changes
+    const sizeMaxMatch = text.match(/(?:size\s*max|max\s*size|up\s*to)\s*([\d,.]+[kK]?)\s*(?:sq|sf)?/i);
+    if (sizeMaxMatch) edits.sizeMax = parseSize(sizeMaxMatch[1]);
+    const sizeMinMatch = text.match(/(?:size\s*min|min\s*size|at\s*least)\s*([\d,.]+[kK]?)\s*(?:sq|sf)?/i);
+    if (sizeMinMatch) edits.sizeMin = parseSize(sizeMinMatch[1]);
+
+    // Special criteria
+    const specialMatch = text.match(/(?:special|criteria|notes|add\s*note)[:\s]+(.+?)(?:$)/i);
+    if (specialMatch) edits.specialCriteria = specialMatch[1].trim();
+
+    // Email change
+    const emailMatch = text.match(/[\w.+-]+@[\w.-]+\.\w+/);
+    if (emailMatch) edits.email = emailMatch[0];
+
+    return edits;
+}
 
 export async function POST(req: Request) {
     try {
@@ -124,20 +278,20 @@ export async function POST(req: Request) {
 
         console.log("[Command Center] Received:", prompt);
 
-        // ═══ STEP 1: CLASSIFY INTENT ═══
-        const routing = await generateAnalysis(INTENT_ROUTER, `Command: "${prompt}"`);
-        const intent = routing.intent;
-
-        console.log("[Command Center] Classified intent:", intent);
+        // ═══ STEP 1: CLASSIFY INTENT (deterministic — no AI) ═══
+        const { intent, clientName } = classifyIntent(prompt);
+        console.log(`[Command Center] Intent: ${intent}, Client: ${clientName || "N/A"}`);
 
         // ═══ STEP 2: EXECUTE INTENT ═══
         switch (intent) {
 
-            // ───────────────────────────
-            // ADD CLIENT
-            // ───────────────────────────
+            // ─── ADD CLIENT (deterministic regex parser) ───
             case "add": {
-                const analysis = await generateAnalysis(ADD_CLIENT_PROMPT, `Broker Command: "${prompt}"`);
+                const analysis = parseBuyBoxFromText(prompt);
+
+                if (!analysis.name) {
+                    return NextResponse.json({ intent: "add", success: false, message: "Could not identify the client's name. Try: 'Add [Name], [property type], [location], [price range]'" });
+                }
 
                 const now = new Date().toISOString();
                 const buyBoxJson = {
@@ -149,13 +303,12 @@ export async function POST(req: Request) {
                     priceMax: analysis.priceMax || "",
                     sizeMin: analysis.sizeMin || "",
                     sizeMax: analysis.sizeMax || "",
-                    specialCriteria: analysis.specialCriteria || ""
+                    specialCriteria: analysis.specialCriteria || "",
                 };
 
                 const fields: any = { buy_box_json: buyBoxJson, updated_at: now };
                 if (analysis.email) fields.email = analysis.email;
 
-                // Check-then-insert/update: avoids broken upsert with non-existent unique constraint
                 const { data: existing, error: findError } = await supabaseAdmin
                     .from('clients')
                     .select('id')
@@ -188,22 +341,19 @@ export async function POST(req: Request) {
                     intent: "add",
                     success: true,
                     message: `${analysis.name} has been locked into the 7:00 AM Deal Flow.`,
-                    client: savedClient
+                    client: savedClient,
                 });
             }
 
-            // ───────────────────────────
-            // EDIT CLIENT
-            // ───────────────────────────
+            // ─── EDIT CLIENT (deterministic regex parser) ───
             case "edit": {
-                const edits = await generateAnalysis(EDIT_CLIENT_PROMPT, `Broker Command: "${prompt}"`);
-                const targetName = edits.clientName || routing.clientName;
+                const edits = parseEditFromText(prompt, clientName);
+                const targetName = edits.clientName || clientName;
 
                 if (!targetName) {
                     return NextResponse.json({ intent: "edit", success: false, message: "Could not identify which client to edit." });
                 }
 
-                // Fetch existing client
                 const { data: existing } = await supabaseAdmin
                     .from('clients')
                     .select('*')
@@ -211,14 +361,11 @@ export async function POST(req: Request) {
                     .limit(1);
 
                 if (!existing || existing.length === 0) {
-                    return NextResponse.json({ intent: "edit", success: false, message: `Client "${targetName}" not found in your portfolio.` });
+                    return NextResponse.json({ intent: "edit", success: false, message: `Client "${targetName}" not found.` });
                 }
 
                 const client = existing[0];
-                const currentBuyBox = client.buy_box_json || {};
-
-                // Merge only the fields Gemini extracted
-                const updatedBuyBox = { ...currentBuyBox };
+                const updatedBuyBox = { ...client.buy_box_json };
                 if (edits.propertyType) updatedBuyBox.propertyType = edits.propertyType;
                 if (edits.location) updatedBuyBox.location = edits.location;
                 if (edits.priceMin !== undefined && edits.priceMin !== "") updatedBuyBox.priceMin = edits.priceMin;
@@ -227,10 +374,7 @@ export async function POST(req: Request) {
                 if (edits.sizeMax) updatedBuyBox.sizeMax = edits.sizeMax;
                 if (edits.specialCriteria) updatedBuyBox.specialCriteria = edits.specialCriteria;
 
-                const updatePayload: any = {
-                    buy_box_json: updatedBuyBox,
-                    updated_at: new Date().toISOString()
-                };
+                const updatePayload: any = { buy_box_json: updatedBuyBox, updated_at: new Date().toISOString() };
                 if (edits.email) updatePayload.email = edits.email;
 
                 const { data: updated, error } = await supabaseAdmin
@@ -245,27 +389,24 @@ export async function POST(req: Request) {
                     intent: "edit",
                     success: true,
                     message: `${client.name}'s Buy Box has been updated.`,
-                    client: updated?.[0] || client
+                    client: updated?.[0] || client,
                 });
             }
 
-            // ───────────────────────────
-            // DELETE CLIENT
-            // ───────────────────────────
+            // ─── DELETE CLIENT (no AI needed) ───
             case "delete": {
-                const targetName = routing.clientName;
-                if (!targetName) {
+                if (!clientName) {
                     return NextResponse.json({ intent: "delete", success: false, message: "Could not identify which client to remove." });
                 }
 
                 const { data: found } = await supabaseAdmin
                     .from('clients')
                     .select('id, name')
-                    .ilike('name', `%${targetName}%`)
+                    .ilike('name', `%${clientName}%`)
                     .limit(1);
 
                 if (!found || found.length === 0) {
-                    return NextResponse.json({ intent: "delete", success: false, message: `Client "${targetName}" not found.` });
+                    return NextResponse.json({ intent: "delete", success: false, message: `Client "${clientName}" not found.` });
                 }
 
                 const { error } = await supabaseAdmin
@@ -279,33 +420,29 @@ export async function POST(req: Request) {
                     intent: "delete",
                     success: true,
                     message: `${found[0].name} has been removed from the Deal Flow.`,
-                    deletedName: found[0].name
+                    deletedName: found[0].name,
                 });
             }
 
-            // ───────────────────────────
-            // QUERY CLIENT
-            // ───────────────────────────
+            // ─── QUERY CLIENT (no AI needed) ───
             case "query": {
-                const targetName = routing.clientName;
-                if (!targetName) {
+                if (!clientName) {
                     return NextResponse.json({ intent: "query", success: false, message: "Could not identify which client to query." });
                 }
 
                 const { data: clients } = await supabaseAdmin
                     .from('clients')
                     .select('*')
-                    .ilike('name', `%${targetName}%`)
+                    .ilike('name', `%${clientName}%`)
                     .limit(1);
 
                 if (!clients || clients.length === 0) {
-                    return NextResponse.json({ intent: "query", success: false, message: `Client "${targetName}" not found.` });
+                    return NextResponse.json({ intent: "query", success: false, message: `Client "${clientName}" not found.` });
                 }
 
                 const client = clients[0];
                 const bb = client.buy_box_json || {};
 
-                // Fetch their latest AI analyses — use UUID, match actual column names
                 const { data: analyses } = await supabaseAdmin
                     .from('ai_analyses')
                     .select('property_id, ai_score, ai_reason')
@@ -316,21 +453,22 @@ export async function POST(req: Request) {
                 return NextResponse.json({
                     intent: "query",
                     success: true,
-                    message: `${client.name}: ${bb.propertyType || "Commercial"} in ${bb.location || "Any Location"}, ${bb.priceMin ? "$" + (parseInt(bb.priceMin)/1000000).toFixed(1) + "M" : "$0"} – ${bb.priceMax ? "$" + (parseInt(bb.priceMax)/1000000).toFixed(1) + "M" : "No Max"}`,
+                    message: `${client.name}: ${bb.propertyType || "Commercial"} in ${bb.location || "Any Location"}, ${bb.priceMin ? "$" + (parseInt(bb.priceMin) / 1000000).toFixed(1) + "M" : "$0"} – ${bb.priceMax ? "$" + (parseInt(bb.priceMax) / 1000000).toFixed(1) + "M" : "No Max"}`,
                     client,
-                    recentMatches: analyses || []
+                    recentMatches: analyses || [],
                 });
             }
 
-            // ───────────────────────────
-            // BLAST (Trigger Daily Email)
-            // ───────────────────────────
+            // ─── BLAST (no AI needed) ───
             case "blast": {
                 try {
-                    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-                    const blastRes = await fetch(`${APP_URL}/api/cron/daily-blast`, {
+                    const rawUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+                    const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
+                    const appUrl = (rawUrl && !rawUrl.includes("localhost")) ? rawUrl : (vercelUrl || "https://opulentus.vercel.app");
+
+                    const blastRes = await fetch(`${appUrl}/api/cron/daily-blast`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
+                        headers: { 'Content-Type': 'application/json' },
                     });
                     const blastResult = await blastRes.json();
 
@@ -338,37 +476,21 @@ export async function POST(req: Request) {
                         intent: "blast",
                         success: true,
                         message: `Daily Blast fired! ${blastResult.totalDealsRouted || 0} deals routed across ${blastResult.clientsMatched || 0} clients.`,
-                        details: blastResult
+                        details: blastResult,
                     });
                 } catch (blastErr: any) {
-                    return NextResponse.json({
-                        intent: "blast",
-                        success: false,
-                        message: `Blast trigger failed: ${blastErr.message}`
-                    });
+                    return NextResponse.json({ intent: "blast", success: false, message: `Blast trigger failed: ${blastErr.message}` });
                 }
             }
 
-            // ───────────────────────────
-            // SEARCH (MLS Property Search)
-            // ───────────────────────────
-            case "search": {
-                const searchQuery = routing.searchQuery || prompt;
-                return NextResponse.json({
-                    intent: "search",
-                    success: true,
-                    searchQuery,
-                    message: `Searching: "${searchQuery}"`
-                });
-            }
-
+            // ─── SEARCH (no AI needed) ───
+            case "search":
             default:
-                // Fallback: treat as a search query
                 return NextResponse.json({
                     intent: "search",
                     success: true,
                     searchQuery: prompt,
-                    message: `Searching: "${prompt}"`
+                    message: `Searching: "${prompt}"`,
                 });
         }
 

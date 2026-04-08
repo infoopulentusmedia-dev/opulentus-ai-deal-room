@@ -1,43 +1,12 @@
 import { NextResponse } from 'next/server';
-import { generateAnalysis } from "@/lib/gemini/client";
-import { getLatestScan } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase";
+import { findMatchesForBuyBox, scoreProperty, BuyBox } from "@/lib/matching/engine";
 import { checkTaxIncentives } from "@/app/api/tax-incentive-check/route";
 
-const DAILY_DIGEST_SYSTEM = `You are an elite Commercial Real Estate Acquisitions Director for Opulentus Private Wealth.
-Your job is to review a raw daily feed of deeply nested property JSON scraped from Crexi and LoopNet, compare them against a specific client's strict "Buy Box" criteria, and curate the best deals into a morning briefing.
-
-You will be given:
-1. The Client's "Buy Box" Criteria.
-2. The "Daily Feed" (a JSON array of new properties intelligently merged from RealComp MLS, Crexi, and LoopNet).
-
-YOUR TASK:
-1. Filter out any properties that drastically violate the Buy Box.
-2. For the remaining valid properties, assign a matchScore (0-100), write a 2-3 sentence reasoning explaining exactly why it fits the criteria, and list any redFlags.
-3. CRITICAL: For any property in the JSON that has a "_historicalPriceDrop" value greater than 0, you MUST write a 1-sentence "priceDropReasoning" predicting the seller's motivation level based on the size of the drop in relation to the original price.
-4. CRITICAL: For any property in the JSON that has "_ghostListingData", this means the broker has listed it on both Crexi AND LoopNet. You MUST write a 1-to-2 sentence "arbitrageAnalysis" explaining any price differences ("Listed $200k cheaper on LoopNet") or stale days-on-market discrepancies.
-5. Write a highly professional, 2-to-3 paragraph "briefing" summarizing the state of the market today, highlighting any major price reductions or arbitrage if applicable.
-6. IF ZERO (0) PROPERTIES MATCH the strict criteria, you MUST provide a "strategyFeedback" paragraph. This paragraph should analyze the discarded properties and suggest how the client could slightly tweak their Buy Box (e.g. increase max price or expand radius) to unlock viable deals that closely align with their goals.
-7. PORTFOLIO FIT SCORING (Step 12): If "Portfolio Holdings" data is provided, you MUST evaluate each property against the client's existing assets. Score 0-100 on how well the new deal fits (diversification, concentration risk, geographic overlap). Write a 1-sentence "portfolioFitReasoning" explaining whether this deal strengthens or weakens the client's portfolio balance.
-8. Return a JSON structure exactly matching this schema:
-{
-    "briefing": "The 2-to-3 paragraph morning briefing text...",
-    "strategyFeedback": "Optional: Only include if 0 properties match. E.g., 'While no properties matched your strict $1M cap, bumping to $1.2M unlocks 3 excellent industrial options...'",
-    "curatedProperties": [
-        {
-            "sourceId": "The CRX- or LN- ID",
-            "reasoning": "Fits criteria because...",
-            "matchScore": 95,
-            "redFlags": ["High vacancy"],
-            "priceDropReasoning": "A $100k drop on a $1M asset suggests high motivation to sell before year-end.",
-            "arbitrageAnalysis": "Arbitrage alert: This listing is priced $150k lower on Crexi than on LoopNet, offering an immediate negotiation advantage.",
-            "portfolioFitScore": 82,
-            "portfolioFitReasoning": "Adding this strip center diversifies Ali's retail footprint beyond Dearborn while maintaining his 60/40 retail-industrial split."
-        }
-    ]
-}
-`;
-
+/**
+ * DAILY DIGEST — Deterministic matching, zero AI calls.
+ * Finds properties matching a buy box, scores them, generates briefing and strategy feedback.
+ */
 export async function POST(req: Request) {
     try {
         const body = await req.json();
@@ -47,73 +16,147 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing buybox criteria." }, { status: 400 });
         }
 
-        // Fetch all live properties from Supabase Postgres Database instead of the Vercel filesystem
+        // Load properties from Supabase
         const { data: properties, error: dbErr } = await supabaseAdmin.from('properties')
-            .select('*')
-            .order('scraped_at', { ascending: false })
-            .limit(200);
+            .select('id, platform, address, price, property_type, property_data_json')
+            .order('id', { ascending: false })
+            .limit(500);
 
         if (dbErr || !properties || properties.length === 0) {
             return NextResponse.json({
-                briefing: "Your Supabase Database does not have any scraped properties yet. Trigger the daily scraper to populate the database.",
-                properties: []
+                briefing: "No scraped properties in the database yet. The daily scraper will populate data at 7 AM UTC.",
+                properties: [],
+                strategyFeedback: null,
             });
         }
 
-        const combinedFeed = properties.map(p => p.property_data_json);
+        const validProperties = properties.filter(p => p.property_data_json != null);
 
-        // --- CACHE CHECK --- (Disabled for Vercel compilation)
-
-        const promptPayload = `
-Client Buy Box Criteria:
-- Type: ${buybox.propertyType}
-- Transaction: ${buybox.transactionType}
-- Location: ${buybox.location}
-- Min Price: ${buybox.priceMin || 'None'}
-- Max Price: ${buybox.priceMax || 'None'}
-- Min Size: ${buybox.sizeMin || 'None'}
-- Max Size: ${buybox.sizeMax || 'None'}
-- Special: ${buybox.specialCriteria || 'None'}
-- Portfolio Holdings: ${buybox.portfolioHoldings || 'No existing portfolio data provided.'}
-
-Daily Feed (JSON):
-${JSON.stringify(combinedFeed, null, 2)}
-`;
-
-        const aiAnalysis = await generateAnalysis(DAILY_DIGEST_SYSTEM, promptPayload);
-
-        // Map the IDs back into full property objects, injecting the Gemini reasoning natively
-        const curatedProperties = aiAnalysis.curatedProperties.map((geminiData: any) => {
-            const rawProp = combinedFeed.find((p: any) => p.sourceId === geminiData.sourceId);
-            if (!rawProp) return null;
-
-            // Step 14: Auto-stamp tax incentive badges
-            const taxResult = checkTaxIncentives(rawProp.zipCode || "");
-
-            return {
-                ...rawProp,
-                aiReasoning: geminiData.reasoning,
-                aiMatchScore: geminiData.matchScore,
-                aiRedFlags: geminiData.redFlags || [],
-                aiPriceDropReasoning: geminiData.priceDropReasoning || null,
-                aiArbitrageAnalysis: geminiData.arbitrageAnalysis || null,
-                aiPortfolioFitScore: geminiData.portfolioFitScore || null,
-                aiPortfolioFitReasoning: geminiData.portfolioFitReasoning || null,
-                taxIncentives: taxResult
-            };
-        }).filter(Boolean);
-
-        const finalResponse = {
-            briefing: aiAnalysis.briefing,
-            strategyFeedback: aiAnalysis.strategyFeedback || null,
-            properties: curatedProperties
+        // Run matching engine
+        const bb: BuyBox = {
+            propertyType: buybox.propertyType,
+            transactionType: buybox.transactionType,
+            location: buybox.location,
+            priceMin: buybox.priceMin,
+            priceMax: buybox.priceMax,
+            sizeMin: buybox.sizeMin,
+            sizeMax: buybox.sizeMax,
+            specialCriteria: buybox.specialCriteria,
+            portfolioHoldings: buybox.portfolioHoldings,
         };
 
-        // Cache saving disabled
-        return NextResponse.json(finalResponse);
+        const { matches, nearMisses } = findMatchesForBuyBox(bb, validProperties, {
+            limit: 20,
+            includeNearMisses: true,
+        });
+
+        // Enrich matched properties with tax incentives and full data
+        const curatedProperties = matches.map(m => {
+            const prop = m.property;
+            let taxResult = null;
+            try {
+                taxResult = checkTaxIncentives(prop.zipCode || prop.zip_code || "");
+            } catch { /* non-fatal */ }
+
+            // Price drop reasoning (deterministic)
+            let priceDropReasoning = null;
+            if (prop._historicalPriceDrop && prop._historicalPriceDrop > 0) {
+                const dropPct = prop._historicalOriginalPrice
+                    ? Math.round((prop._historicalPriceDrop / prop._historicalOriginalPrice) * 100)
+                    : null;
+                priceDropReasoning = dropPct
+                    ? `Price dropped ${dropPct}% ($${(prop._historicalPriceDrop / 1000).toFixed(0)}K) from original — seller likely motivated to close.`
+                    : `Price reduced by $${(prop._historicalPriceDrop / 1000).toFixed(0)}K — signals willingness to negotiate.`;
+            }
+
+            // Arbitrage analysis (deterministic)
+            let arbitrageAnalysis = null;
+            if (prop._ghostListingData) {
+                const ghost = prop._ghostListingData;
+                if (ghost.priceDifference !== 0) {
+                    const cheaper = ghost.priceDifference > 0 ? ghost.otherPlatform : prop.platform;
+                    arbitrageAnalysis = `Listed $${Math.abs(ghost.priceDifference).toLocaleString()} cheaper on ${cheaper?.toUpperCase()}. ${ghost.daysDifference > 0 ? `Also ${Math.abs(ghost.daysDifference)} days staler on ${ghost.otherPlatform}.` : ""}`;
+                }
+            }
+
+            // Portfolio fit (deterministic)
+            let portfolioFitScore = null;
+            let portfolioFitReasoning = null;
+            if (buybox.portfolioHoldings) {
+                const holdings = buybox.portfolioHoldings.toLowerCase();
+                const propType = (prop.propertyType || "").toLowerCase();
+                const propCity = (prop.city || "").toLowerCase();
+
+                if (holdings.includes(propType) && holdings.includes(propCity)) {
+                    portfolioFitScore = 40;
+                    portfolioFitReasoning = `Same type and area as existing holdings — increases concentration risk.`;
+                } else if (holdings.includes(propType)) {
+                    portfolioFitScore = 60;
+                    portfolioFitReasoning = `Same property type but different geography — moderate diversification.`;
+                } else if (holdings.includes(propCity)) {
+                    portfolioFitScore = 75;
+                    portfolioFitReasoning = `Different property type in a familiar market — good diversification play.`;
+                } else {
+                    portfolioFitScore = 90;
+                    portfolioFitReasoning = `New market and property type — strong portfolio diversification.`;
+                }
+            }
+
+            return {
+                ...prop,
+                aiReasoning: m.reasoning,
+                aiMatchScore: m.totalScore,
+                aiRedFlags: m.redFlags,
+                aiPriceDropReasoning: priceDropReasoning,
+                aiArbitrageAnalysis: arbitrageAnalysis,
+                aiPortfolioFitScore: portfolioFitScore,
+                aiPortfolioFitReasoning: portfolioFitReasoning,
+                taxIncentives: taxResult,
+            };
+        });
+
+        // Generate briefing text
+        const clientName = buybox.name || "your client";
+        const location = buybox.location || "target markets";
+        const type = buybox.propertyType || "commercial properties";
+
+        let briefing: string;
+        if (curatedProperties.length > 0) {
+            const top = curatedProperties[0];
+            briefing = `Found ${curatedProperties.length} ${type} listing${curatedProperties.length > 1 ? "s" : ""} matching ${clientName}'s criteria in ${location}. `;
+            briefing += `Top match: ${top.address || top.propertyType} in ${top.city || "the target area"} at $${(top.price || 0).toLocaleString()} (score: ${top.aiMatchScore}/100). `;
+            if (curatedProperties.some((p: any) => p.aiPriceDropReasoning)) {
+                briefing += `Notable: ${curatedProperties.filter((p: any) => p.aiPriceDropReasoning).length} listing(s) with recent price reductions — potential negotiation leverage.`;
+            }
+        } else {
+            briefing = `No ${type} listings exactly matching ${clientName}'s criteria in ${location} today. Scanned ${validProperties.length} active properties across Crexi, LoopNet, and MLS.`;
+        }
+
+        // Strategy feedback (only if zero matches)
+        let strategyFeedback = null;
+        if (curatedProperties.length === 0 && nearMisses.length > 0) {
+            const topNM = nearMisses[0];
+            const bd = topNM.breakdown;
+            if (bd.failedDimension === "price") {
+                strategyFeedback = `${nearMisses.length} properties came close but exceeded the budget. Consider raising the max price by 15-20% to unlock viable options in your target area.`;
+            } else if (bd.failedDimension === "location") {
+                strategyFeedback = `Properties matching the type and price criteria exist in adjacent markets. Consider expanding the search radius to neighboring counties.`;
+            } else if (bd.failedDimension === "type") {
+                strategyFeedback = `The ${location} area has limited ${type} inventory right now. Consider related property types that could serve the same investment thesis.`;
+            } else {
+                strategyFeedback = `${nearMisses.length} properties nearly matched — slight adjustments to criteria (price, location, or size) could unlock quality deals.`;
+            }
+        }
+
+        return NextResponse.json({
+            briefing,
+            strategyFeedback,
+            properties: curatedProperties,
+            engine: "deterministic",
+        });
 
     } catch (error: any) {
-        console.error("Daily Digest Generation Error:", error);
+        console.error("Daily Digest Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
