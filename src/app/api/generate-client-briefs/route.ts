@@ -56,7 +56,12 @@ async function uploadBrief(path: string, data: any): Promise<void> {
 
 async function readManifest(agentId: string): Promise<any> {
     try {
-        const res = await fetch(`${SUPABASE_URL}/storage/v1/object/public/briefs/${agentId}/manifest.json?t=${Date.now()}`, {
+        // Use authenticated endpoint (not public) since the bucket is private
+        const res = await fetch(`${SUPABASE_URL}/storage/v1/object/briefs/${agentId}/manifest.json?t=${Date.now()}`, {
+            headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+            },
             cache: "no-store",
         });
         if (!res.ok) return { clientIds: [], clientNames: {} };

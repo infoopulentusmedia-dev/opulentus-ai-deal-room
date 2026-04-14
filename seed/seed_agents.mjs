@@ -34,37 +34,35 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 // ─── AGENT DEFINITIONS ───
-// Update these with real emails and passwords before running.
-// Agent 2 and Agent 3 emails/passwords are placeholders — fill them in.
 const AGENTS = [
     {
         email: 'njaafar@kw.com',
-        password: 'OpulentusNick2026!',  // Change this to a real password
+        password: '1234',
         display_name: 'Nick',
         company: 'Keller Williams',
         phone: null,
         sender_email: 'info.opulentusmedia@gmail.com',
         recipient_email: 'njaafar@kw.com',
-        is_primary: true, // Existing clients get assigned to this agent
+        is_primary: true, // All existing clients (agent_id IS NULL) migrate to Nick
     },
     {
-        email: 'agent2@placeholder.com',     // REPLACE with real email
-        password: 'OpulentusAgent2_2026!',   // REPLACE with real password
-        display_name: 'Agent 2',             // REPLACE with real name
-        company: null,
+        email: 'zackd@kw.com',
+        password: '1234',
+        display_name: 'Zack',
+        company: 'Keller Williams',
         phone: null,
         sender_email: null,
-        recipient_email: 'agent2@placeholder.com', // REPLACE
+        recipient_email: 'zackd@kw.com',
         is_primary: false,
     },
     {
-        email: 'agent3@placeholder.com',     // REPLACE with real email
-        password: 'OpulentusAgent3_2026!',   // REPLACE with real password
-        display_name: 'Agent 3',             // REPLACE with real name
-        company: null,
+        email: 'husseinalmaliki@kw.com',
+        password: '1234',
+        display_name: 'Hussein',
+        company: 'Keller Williams',
         phone: null,
         sender_email: null,
-        recipient_email: 'agent3@placeholder.com', // REPLACE
+        recipient_email: 'husseinalmaliki@kw.com',
         is_primary: false,
     },
 ];

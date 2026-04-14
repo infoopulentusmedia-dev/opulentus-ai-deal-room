@@ -1,0 +1,46 @@
+Retrieving project…
+Deploying infoopulentusmedia-3082s-projects/opulentus
+Uploading [--------------------] (0.0B/76B)
+Uploading [====================] (76.0B/76B)
+Inspect: https://vercel.com/infoopulentusmedia-3082s-projects/opulentus/EopfTrEkbFD8pooeHoVahGGB396e [2s]
+Production: https://opulentus-ek76s368w-infoopulentusmedia-3082s-projects.vercel.app [2s]
+https://opulentus-ek76s368w-infoopulentusmedia-3082s-projects.vercel.appBuilding...
+Building...
+Building: Running build in Washington, D.C., USA (East) – iad1
+Building: Build machine configuration: 2 cores, 8 GB
+Building: Retrieving list of deployment files...
+Building: Downloading 127 deployment files...
+Building: Restored build cache from previous deployment (5a5hfP4ikPx5uRKFVNNUGeZvp27x)
+Building: Running "vercel build"
+Building: Vercel CLI 50.38.1
+Building: Installing dependencies...
+Building: added 35 packages in 2s
+Building: 179 packages are looking for funding
+Building: run `npm fund` for details
+Building: Detected Next.js version: 16.1.6
+Building: Running "npm run build"
+Building: > opulentus@0.1.0 build
+Building: > next build
+Building: ▲ Next.js 16.1.6 (Turbopack)
+Building: Creating an optimized production build ...
+Building: ✓ Compiled successfully in 12.1s
+Building: Running TypeScript ...
+Building: Collecting page data using 1 worker ...
+Building: Error: supabaseUrl is required.
+Building: at <unknown> (.next/server/chunks/src_lib_supabase_ts_791d4253._.js:37:43440)
+Building: at new rs (.next/server/chunks/src_lib_supabase_ts_791d4253._.js:37:43691)
+Building: at ri (.next/server/chunks/src_lib_supabase_ts_791d4253._.js:37:47633)
+Building: at module evaluation (.next/server/chunks/src_lib_supabase_ts_791d4253._.js:37:48186)
+Building: at instantiateModule (.next/server/chunks/[turbopack]_runtime.js:740:9)
+Building: at getOrInstantiateModuleFromParent (.next/server/chunks/[turbopack]_runtime.js:763:12)
+Building: at Context.esmImport [as i] (.next/server/chunks/[turbopack]_runtime.js:228:20)
+Building: at module evaluation (.next/server/chunks/[root-of-the-server]__f4d76e9c._.js:3:700)
+Building: at instantiateModule (.next/server/chunks/[turbopack]_runtime.js:740:9)
+Building: at getOrInstantiateModuleFromParent (.next/server/chunks/[turbopack]_runtime.js:763:12)
+Building: > Build error occurred
+Building: Error: Failed to collect page data for /api/assistant-command
+Building: at ignore-listed frames {
+Building: type: 'Error'
+Building: }
+Building: Error: Command "npm run build" exited with 1
+Error: Command "npm run build" exited with 1

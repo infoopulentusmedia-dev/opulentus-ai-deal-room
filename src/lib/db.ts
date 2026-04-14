@@ -285,6 +285,7 @@ export async function cleanupOldData(): Promise<{ deletedScans: number; deletedP
 export interface CachedAnalysis {
     property_id: string;
     client_id: string;
+    agent_id?: string | null;
     ai_score: number;
     ai_reason: string;
     property_price: number | null;

@@ -117,6 +117,7 @@ ${JSON.stringify(analysisBatch, null, 2)}
                     cacheToSave.push({
                         property_id: fullProp.sourceId,
                         client_id: client.id,
+                        agent_id: agent.id,
                         ai_score: match.score || 90,
                         ai_reason: match.aiReason || "Fits general criteria.",
                         property_price: fullProp.price || null
