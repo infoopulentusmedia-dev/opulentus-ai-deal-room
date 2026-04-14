@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getLiveApifyFeed } from "@/lib/apify/fetcher";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 export async function GET(req: Request) {
+    // Each call burns paid Apify compute — require an authenticated agent.
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     try {
         const { searchParams } = new URL(req.url);
         const source = searchParams.get("source");

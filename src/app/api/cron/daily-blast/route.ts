@@ -3,6 +3,7 @@ import { getLatestScan } from '@/lib/db';
 import { generateAnalysis } from '@/lib/gemini/client';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getResolvedUrl } from '@/lib/urlResolver';
+import { requireCronSecret } from '@/lib/supabase/auth-helpers';
 import sgMail from '@sendgrid/mail';
 
 // Initialize SendGrid
@@ -13,6 +14,11 @@ const DEFAULT_FROM_EMAIL = "info.opulentusmedia@gmail.com";
 const DEFAULT_FROM_NAME = "Opulentus AI";
 
 export async function POST(req: Request) {
+    // Gate: Vercel cron header, x-cron-secret header, or ?secret= query param.
+    // Fail-closed if CRON_SECRET is unset in the environment.
+    const auth = requireCronSecret(req);
+    if (auth.error) return auth.error;
+
     try {
         // 1. Fetch all agents
         const { data: agents, error: agentsErr } = await supabaseAdmin

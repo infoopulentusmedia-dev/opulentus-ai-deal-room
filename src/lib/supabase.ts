@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+// Side-effect import: validates required env vars at cold start (server-side only).
+import '@/lib/env';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
