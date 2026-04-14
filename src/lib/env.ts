@@ -13,11 +13,16 @@ const ALWAYS_REQUIRED = [
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
-    'CRON_SECRET',
 ] as const;
 
-/** Required in production; warned-about in local dev so the app still boots without every key. */
+/**
+ * Required in production; warned-about in local dev so the app still boots
+ * without every key. CRON_SECRET sits here so `next dev` works without it,
+ * while prod deploys hard-fail if it's missing (cron routes also gate at
+ * call-time via requireCronSecret for defense in depth).
+ */
 const PROD_REQUIRED = [
+    'CRON_SECRET',
     'SENDGRID_API_KEY',
     'GEMINI_API_KEY',
     'APIFY_API_TOKEN',
