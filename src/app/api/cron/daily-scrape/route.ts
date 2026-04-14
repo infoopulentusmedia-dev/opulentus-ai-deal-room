@@ -4,6 +4,7 @@ import { saveDailyScan, cleanupOldData } from "@/lib/db";
 import { ApifyPropertyListing } from "@/lib/apify/mockFeed";
 import { fetchRealCompProperties } from "@/lib/realcomp/api";
 import { isRealcompCompliant, mapRealcompProperty } from "@/lib/realcomp/mapper";
+import { requireCronSecret } from "@/lib/supabase/auth-helpers";
 
 // Vercel Cron Jobs require a GET or POST handler
 export async function POST(req: Request) {
@@ -11,6 +12,11 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+    // Every invocation fires Crexi + LoopNet + RealComp scrapes (paid compute).
+    // Vercel Cron passes `Authorization: Bearer $CRON_SECRET`, matched inside requireCronSecret.
+    const auth = requireCronSecret(req);
+    if (auth.error) return auth.error;
+
     try {
         console.log("[Cron] Starting daily property scrape...");
 

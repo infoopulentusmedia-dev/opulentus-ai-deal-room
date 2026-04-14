@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { analyzePropertiesForClient } from "@/lib/matching/engine";
+import { requireCronSecret } from "@/lib/supabase/auth-helpers";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const CRON_SECRET = process.env.CRON_SECRET || "";
 
 // Vercel function timeout safety margin (bail 30s before hard kill)
 const MAX_DURATION_MS = 270_000;
@@ -263,18 +263,12 @@ async function generateBriefsForAgent(
 export async function POST(req: Request) {
     const startTime = Date.now();
 
-    try {
-        // Auth check (cron secret)
-        if (CRON_SECRET) {
-            const headerSecret = req.headers.get("x-cron-secret") || "";
-            const { searchParams: authParams } = new URL(req.url);
-            const querySecret = authParams.get("secret") || "";
-            const vercelCron = req.headers.get("authorization") === `Bearer ${CRON_SECRET}`;
-            if (headerSecret !== CRON_SECRET && querySecret !== CRON_SECRET && !vercelCron) {
-                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-            }
-        }
+    // Fail-closed cron-secret gate. Prior implementation was fail-open when
+    // CRON_SECRET was unset — the helper 500s instead of skipping auth.
+    const auth = requireCronSecret(req);
+    if (auth.error) return auth.error;
 
+    try {
         const { searchParams } = new URL(req.url);
         const singleClientId = searchParams.get("clientId");
         const singleAgentId = searchParams.get("agentId");

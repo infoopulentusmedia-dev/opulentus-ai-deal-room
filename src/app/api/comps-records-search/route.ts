@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAnalysis } from "@/lib/gemini/client";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 const SYSTEM_INSTRUCTION = `You are Opulentus Comps Analyst, a Michigan real estate comparable analysis AI.
 Given a subject property, generate realistic comparable sales and listings from the same area.
@@ -35,6 +36,10 @@ Return valid JSON matching this schema:
 }`;
 
 export async function POST(req: NextRequest) {
+    // Calls Gemini to synthesize comps — gate to signed-in agents to prevent cost abuse.
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     try {
         const { property } = await req.json();
 

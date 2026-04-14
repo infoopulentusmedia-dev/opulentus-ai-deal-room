@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { getLocalComps } from "@/lib/apify/compsFetcher";
 import { MARKET_CONSTANTS } from "@/lib/scoring";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 /**
  * COMP CHECK — Deterministic valuation analysis, zero AI calls.
  * Compares asking price vs closed comps, calculates variance, determines negotiation leverage.
  */
 export async function POST(req: Request) {
+    // Hits the Apify-backed comps cache — gate to signed-in agents.
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     try {
         const { property } = await req.json();
 

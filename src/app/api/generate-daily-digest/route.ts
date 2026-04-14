@@ -2,12 +2,17 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from "@/lib/supabase";
 import { findMatchesForBuyBox, scoreProperty, BuyBox } from "@/lib/matching/engine";
 import { checkTaxIncentives } from "@/app/api/tax-incentive-check/route";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 /**
  * DAILY DIGEST — Deterministic matching, zero AI calls.
  * Finds properties matching a buy box, scores them, generates briefing and strategy feedback.
  */
 export async function POST(req: Request) {
+    // Reads the shared `properties` pool — gate to signed-in agents so bots can't drain DB/CPU.
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     try {
         const body = await req.json();
         const { buybox } = body;

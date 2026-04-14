@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getLatestScan } from "@/lib/db";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 export async function GET(req: Request) {
+    // Exposes full listing data from today's scan — require an authenticated agent.
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     try {
         const { searchParams } = new URL(req.url);
         const sourceId = searchParams.get("sourceId");

@@ -5,16 +5,25 @@ import { isRealcompCompliant, mapRealcompProperty } from "@/lib/realcomp/mapper"
 import { saveDailyScan } from "@/lib/db";
 import { ApifyPropertyListing } from "@/lib/apify/mockFeed";
 
-// Secret token to prevent unauthorized triggers payload
-const WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET || "opulentus-secure-apify-trigger-2024";
-
 export async function POST(req: NextRequest) {
+    // 1. Authenticate the webhook. FAIL-CLOSED: refuse if APIFY_WEBHOOK_SECRET
+    // is unset rather than fall back to a hardcoded default (prior behaviour
+    // leaked a public secret via the repo).
+    const WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET || "";
+    if (!WEBHOOK_SECRET) {
+        console.error("[apify webhook] APIFY_WEBHOOK_SECRET is not set — refusing webhook");
+        return NextResponse.json(
+            { error: "Server misconfigured: APIFY_WEBHOOK_SECRET not set" },
+            { status: 500 }
+        );
+    }
+
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader !== `Bearer ${WEBHOOK_SECRET}`) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
-        // 1. Authenticate the Webhook
-        const authHeader = req.headers.get("Authorization");
-        if (authHeader !== `Bearer ${WEBHOOK_SECRET}`) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
 
         const payload = await req.json();
         console.log(`[Webhook] Received Apify Trigger from Actor: ${payload.actorId}, Run: ${payload.resource?.defaultDatasetId}`);
@@ -58,9 +67,12 @@ export async function POST(req: NextRequest) {
         
         // Fire it asynchronously so we don't hold the Apify webhook connection open
         // and risk a timeout while Gemini processes 50 properties.
+        // daily-blast now requires CRON_SECRET (SS-1 gate) — forward it on the internal call.
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const cronSecret = process.env.CRON_SECRET || "";
         fetch(`${APP_URL}/api/cron/daily-blast`, {
             method: 'POST',
+            headers: cronSecret ? { "x-cron-secret": cronSecret } : {},
             // No need to await, let it run detached
         }).catch(err => console.error("Failed to trigger Daily Blast from webhook", err));
 

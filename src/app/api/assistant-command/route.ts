@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateOrchestratorPlan, generateAnalysis } from "@/lib/gemini/client";
 import { evaluateDeal } from "@/lib/scoring";
 import { getLatestScan } from "@/lib/db";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 // ──────────────────────────────────────────────────────────
 // SYSTEM PROMPTS
 // ──────────────────────────────────────────────────────────
@@ -243,6 +244,11 @@ async function searchApifyDB(parameters: any, investmentIntent: string, top: num
 // ──────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Each call triggers 1–4 Gemini completions (intent router + follow-up / search / property-lookup).
+  // Require an authenticated agent so abuse ties to a known identity and can be rate-limited later.
+  const auth = await requireAgent();
+  if (auth.error) return auth.error;
+
   try {
     const { prompt, history, activeProperty, visibleProperties: clientVisibleProps, investmentIntent } = await req.json();
 

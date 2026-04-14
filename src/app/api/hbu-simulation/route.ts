@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAnalysis } from "@/lib/gemini/client";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 const SYSTEM_INSTRUCTION = `You are the Opulentus "Highest & Best Use" (HBU) AI Engine.
 You specialize in commercial real estate underwriting and distressed asset repositioning.
@@ -55,6 +56,10 @@ Return valid JSON matching this exact schema:
 }`;
 
 export async function POST(req: NextRequest) {
+    // 1 Gemini call per request — gate for cost protection.
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     try {
         const { property } = await req.json();
 
