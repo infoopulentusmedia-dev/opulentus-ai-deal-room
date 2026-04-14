@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAgent } from '@/lib/supabase/auth-helpers';
 
 export async function GET(req: Request) {
+    const auth = await requireAgent();
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(req.url);
     const clientId = searchParams.get('clientId');
 
     let query = supabaseAdmin
         .from('chat_sessions')
         .select('*')
+        .eq('agent_id', auth.agentId)
         .order('updated_at', { ascending: false })
         .limit(10);
 
@@ -18,7 +23,7 @@ export async function GET(req: Request) {
     const { data, error } = await query;
     if (error) {
         console.error("Supabase fetch chat_sessions error:", error);
-        return NextResponse.json([], { status: 200 }); // Graceful degradation
+        return NextResponse.json([], { status: 200 });
     }
 
     return NextResponse.json(data);
@@ -26,6 +31,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
     try {
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
+
         const body = await req.json();
         const { session, clientId } = body;
 
@@ -36,6 +44,7 @@ export async function POST(req: Request) {
         const record = {
             id: session.id,
             client_id: clientId || 'global',
+            agent_id: auth.agentId,
             chat_json: session,
             updated_at: new Date(session.updatedAt || Date.now()).toISOString()
         };

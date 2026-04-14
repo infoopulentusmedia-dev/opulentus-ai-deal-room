@@ -7,7 +7,8 @@ import "@fontsource/geist-mono/400.css";
 import "@fontsource/geist-mono/500.css";
 import "@fontsource/geist-mono/600.css";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AuthProvider from "@/components/AuthProvider";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "Opulentus | Nix Real Estate Helper",
@@ -22,12 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased bg-[#0A0A0A] text-white`}>
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 w-full h-full overflow-y-auto">
-            {children}
-          </main>
-        </div>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );

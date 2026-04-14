@@ -114,6 +114,19 @@ function safeNum(val: any): number | null {
     if (val === null || val === undefined || val === "") return null;
     if (typeof val === "number") return isNaN(val) ? null : val;
     if (typeof val === "string") {
+        const s = val.trim().toLowerCase();
+        // Handle M/K suffixes: "$1.5M" → 1500000, "$500K" → 500000
+        const mMatch = s.match(/^\$?\s*([\d,.]+)\s*m$/i);
+        if (mMatch) {
+            const num = parseFloat(mMatch[1].replace(/,/g, ""));
+            return isNaN(num) ? null : Math.round(num * 1_000_000);
+        }
+        const kMatch = s.match(/^\$?\s*([\d,.]+)\s*k$/i);
+        if (kMatch) {
+            const num = parseFloat(kMatch[1].replace(/,/g, ""));
+            return isNaN(num) ? null : Math.round(num * 1_000);
+        }
+        // Standard: strip non-numeric, parse
         const cleaned = val.replace(/[^0-9.]/g, "");
         const num = parseFloat(cleaned);
         return isNaN(num) ? null : num;
@@ -157,16 +170,50 @@ interface ParsedLocation {
     raw: string[];
 }
 
+// Metro area aliases that expand to multiple counties
+const METRO_ALIASES: Record<string, string[]> = {
+    "metro detroit": ["wayne", "oakland", "macomb"],
+    "southeast michigan": ["wayne", "oakland", "macomb", "washtenaw", "livingston"],
+    "se michigan": ["wayne", "oakland", "macomb", "washtenaw", "livingston"],
+    "tri-county": ["wayne", "oakland", "macomb"],
+    "tri county": ["wayne", "oakland", "macomb"],
+    "downriver": ["wayne"], // subset of Wayne (Southgate, Wyandotte, Trenton, etc.)
+    "metro grand rapids": ["kent"],
+};
+
+// Normalize township/city suffixes for matching
+function normalizeCity(city: string): string {
+    return city
+        .replace(/\s+(township|twp|charter township|village|city of)\s*$/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 function parseLocation(locationStr: string): ParsedLocation {
     const result: ParsedLocation = { cities: [], zips: [], counties: [], states: [], raw: [] };
     if (!locationStr) return result;
 
-    const parts = locationStr.toLowerCase()
+    const lower = locationStr.toLowerCase().trim();
+
+    // Check metro area aliases FIRST (before splitting on commas)
+    for (const [alias, counties] of Object.entries(METRO_ALIASES)) {
+        if (lower.includes(alias)) {
+            result.counties.push(...counties);
+            // Remove the alias from the string so it doesn't get re-parsed
+            const remaining = lower.replace(alias, "").trim();
+            if (!remaining) return result;
+        }
+    }
+
+    const parts = lower
         .split(/[,|/&;]+/)
         .map(s => s.trim())
         .filter(Boolean);
 
     for (const part of parts) {
+        // Skip if already handled as metro alias
+        if (Object.keys(METRO_ALIASES).some(a => part.includes(a))) continue;
+
         // Zip codes: 5-digit numbers
         if (/^\d{5}$/.test(part)) {
             result.zips.push(part);
@@ -193,9 +240,10 @@ function parseLocation(locationStr: string): ParsedLocation {
             continue;
         }
 
-        // Otherwise treat as city name
-        result.cities.push(part.replace(/\bcounty\b/i, "").trim());
-        result.raw.push(part);
+        // Normalize city name (strip "Township", "Twp", etc.) and add
+        const normalized = normalizeCity(part);
+        result.cities.push(normalized);
+        result.raw.push(normalized);
     }
 
     return result;

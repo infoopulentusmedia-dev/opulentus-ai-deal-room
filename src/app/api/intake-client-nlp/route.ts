@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateAnalysis } from "@/lib/gemini/client";
 import { supabaseAdmin } from "@/lib/supabase";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 const NLP_INTAKE_SYSTEM = `You are the Opulentus Master Router Client Intake AI.
 Your SOLE job is to extract a real estate client's "Buy Box" from a natural language command.
@@ -113,6 +114,9 @@ OUTPUT — STRICTLY VALID JSON
 
 export async function POST(req: Request) {
     try {
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
+
         const body = await req.json();
         const { prompt } = body;
 
@@ -145,11 +149,12 @@ export async function POST(req: Request) {
             upsertPayload.email = analysis.email;
         }
 
-        // 3. Immediately commit to Supabase — check-then-insert/update (no unique constraint on name)
+        // 3. Immediately commit to Supabase — check-then-insert/update (scoped to agent)
         const { data: existing, error: findError } = await supabaseAdmin
             .from('clients')
             .select('id')
             .eq('name', analysis.name)
+            .eq('agent_id', auth.agentId)
             .maybeSingle();
 
         if (findError) {
@@ -170,7 +175,7 @@ export async function POST(req: Request) {
         } else {
             const { data, error } = await supabaseAdmin
                 .from('clients')
-                .insert({ name: analysis.name, ...upsertPayload })
+                .insert({ name: analysis.name, agent_id: auth.agentId, ...upsertPayload })
                 .select()
                 .single();
             if (error) { console.error("Supabase NLP Intake Insert Error:", error); throw error; }

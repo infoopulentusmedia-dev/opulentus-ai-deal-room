@@ -1,10 +1,22 @@
 -- Run this entirely in the Supabase SQL Editor
 
+-- 0. Create Agents Table (references auth.users)
+CREATE TABLE IF NOT EXISTS agents (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    display_name TEXT NOT NULL,
+    company TEXT,
+    phone TEXT,
+    sender_email TEXT,
+    recipient_email TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 1. Create Clients Table
 CREATE TABLE IF NOT EXISTS clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     buy_box_json JSONB NOT NULL,
+    agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

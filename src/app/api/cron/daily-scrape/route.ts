@@ -25,7 +25,7 @@ export async function GET(req: Request) {
         const realcompListings: ApifyPropertyListing[] = (rcRawData.value || [])
             .filter(isRealcompCompliant)
             .map(mapRealcompProperty)
-            .filter((p): p is ApifyPropertyListing => p !== null);
+            .filter((p: any): p is ApifyPropertyListing => p !== null);
 
         // Combine all arrays
         const allListings = [...crexiData, ...loopnetData, ...realcompListings];

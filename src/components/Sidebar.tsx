@@ -4,10 +4,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import BuyBoxWizard from "./BuyBoxWizard";
 import { loadPersonalBuyBox, BuyBoxCriteria, PERSONAL_BUYBOX_ID } from "@/lib/buybox";
+import { useAuth } from "./AuthProvider";
 
 export default function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
+    const { agentProfile, signOut } = useAuth();
     const [mounted, setMounted] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
     const [editingPersonal, setEditingPersonal] = useState(false);
@@ -161,6 +163,30 @@ export default function Sidebar() {
                     </button>
 
                 </nav>
+
+                {/* Agent Profile + Sign Out */}
+                <div className="border-t border-[#242424] px-4 py-4 shrink-0">
+                    <div className="flex items-center gap-3 px-2">
+                        <div className="w-8 h-8 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 flex items-center justify-center shrink-0">
+                            <span className="text-[#D4AF37] font-bold text-xs">
+                                {agentProfile?.display_name?.charAt(0)?.toUpperCase() || "?"}
+                            </span>
+                        </div>
+                        <div className="flex-1 min-w-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <p className="text-[12px] text-white font-medium truncate">{agentProfile?.display_name || "Agent"}</p>
+                            <p className="text-[10px] text-[#7C7C7C] truncate">{agentProfile?.recipient_email || ""}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={signOut}
+                        className="w-full flex items-center px-2 py-2 mt-2 rounded-lg text-[#7C7C7C] hover:bg-[#171717] hover:text-red-400 transition-colors"
+                    >
+                        <div className="w-8 flex items-center justify-center shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        </div>
+                        <span className="ml-3 text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Sign Out</span>
+                    </button>
+                </div>
             </aside>
 
             {/* Hidden spacer to push main content right since sidebar is fixed */}

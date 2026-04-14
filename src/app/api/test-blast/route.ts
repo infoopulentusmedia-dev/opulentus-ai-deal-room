@@ -3,6 +3,7 @@ import { getLatestScan } from "@/lib/db";
 import { generateAnalysis } from "@/lib/gemini/client";
 import { supabaseAdmin } from "@/lib/supabase";
 import { resolvePropertyUrl } from "@/lib/urlResolver";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 /**
  * DRY RUN — Simulates the full daily-blast pipeline WITHOUT sending any emails.
@@ -24,8 +25,12 @@ export async function GET() {
     };
 
     try {
+        // ── Phase 0: Auth ────────────────────────────────────────────────
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
+
         // ── Phase 1: Load data ──────────────────────────────────────────
-        const { data: clients, error: clientsErr } = await supabaseAdmin.from('clients').select('*');
+        const { data: clients, error: clientsErr } = await supabaseAdmin.from('clients').select('*').eq('agent_id', auth.agentId);
         const scan = await getLatestScan();
         const freshListings = scan?.properties || [];
 

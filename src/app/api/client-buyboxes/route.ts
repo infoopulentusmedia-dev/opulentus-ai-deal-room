@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { requireAgent } from "@/lib/supabase/auth-helpers";
 
 export async function GET() {
     try {
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
+
         const { data, error } = await supabaseAdmin
             .from('clients')
             .select('id, name, buy_box_json')
+            .eq('agent_id', auth.agentId)
             .order('created_at', { ascending: true });
 
         if (error) {

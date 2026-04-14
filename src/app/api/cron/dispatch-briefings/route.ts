@@ -16,40 +16,42 @@ export async function GET(req: Request) {
 
         console.log("=== STARTING AUTOMATED BRIEFING DISPATCH ===");
 
-        // 2. Load all clients dynamically from Supabase (no more hardcoded arrays)
-        const { data: clients, error } = await supabaseAdmin
-            .from('clients')
-            .select('id, name, email, buy_box_json');
+        // 2. Load all agents and their clients
+        const { data: agents, error: agentsErr } = await supabaseAdmin
+            .from('agents')
+            .select('id, display_name, recipient_email');
 
-        if (error || !clients || clients.length === 0) {
-            console.error("Failed to load clients from Supabase:", error);
-            return NextResponse.json({
-                success: false,
-                message: "No active clients found in database."
-            });
+        if (agentsErr || !agents || agents.length === 0) {
+            return NextResponse.json({ success: false, message: "No agents found." });
         }
 
-        console.log(`[Cron] Found ${clients.length} active clients from Supabase. Preparing dispatches...`);
+        const dispatchLog: any[] = [];
 
-        // 3. Iterate through clients and trigger the daily-blast for each
-        // In production with 50+ clients, this would push jobs to an SQS/BullMQ queue
-        // to prevent Vercel 10s serverless timeout limits from killing the loop.
-        const dispatchLog = [];
+        for (const agent of agents) {
+            const { data: clients, error } = await supabaseAdmin
+                .from('clients')
+                .select('id, name, email, buy_box_json')
+                .eq('agent_id', agent.id);
 
-        for (const client of clients) {
-            console.log(`[Cron] Drafting customized daily digest for ${client.name}...`);
+            if (error || !clients || clients.length === 0) {
+                console.log(`[Cron] No clients for agent ${agent.display_name}, skipping.`);
+                continue;
+            }
 
-            const targetEmail = client.email || 'safat@safatautomation.com';
-            const emailSubject = `Opulentus Briefing: Top Deals for ${client.name}`;
+            console.log(`[Cron] Agent ${agent.display_name}: ${clients.length} clients. Preparing dispatches...`);
 
-            console.log(`[Cron] Target: ${targetEmail} | Subject: ${emailSubject}`);
+            for (const client of clients) {
+                const targetEmail = agent.recipient_email || client.email || 'njaafar@kw.com';
+                console.log(`[Cron] ${agent.display_name} → ${client.name} | Target: ${targetEmail}`);
 
-            dispatchLog.push({
-                client: client.name,
-                email: targetEmail,
-                status: "dispatched",
-                timestamp: new Date().toISOString()
-            });
+                dispatchLog.push({
+                    agent: agent.display_name,
+                    client: client.name,
+                    email: targetEmail,
+                    status: "dispatched",
+                    timestamp: new Date().toISOString()
+                });
+            }
         }
 
         console.log("=== AUTOMATED BRIEFING DISPATCH COMPLETE ===");

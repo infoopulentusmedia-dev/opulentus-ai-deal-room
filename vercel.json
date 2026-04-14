@@ -18,6 +18,12 @@
     },
     "src/app/api/generate-client-briefs/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/daily-blast/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/client-briefs/route.ts": {
+      "maxDuration": 120
     }
   }
 }

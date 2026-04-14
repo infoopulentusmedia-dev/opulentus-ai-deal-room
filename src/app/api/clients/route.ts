@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAgent } from '@/lib/supabase/auth-helpers';
 
-// GET all active clients
+// GET all active clients for the authenticated agent
 export async function GET() {
     try {
-        const { data, error } = await supabaseAdmin.from('clients').select('id, name, email, buy_box_json, alert_preferences_json, created_at');
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
+
+        const { data, error } = await supabaseAdmin
+            .from('clients')
+            .select('id, name, email, buy_box_json, alert_preferences_json, created_at')
+            .eq('agent_id', auth.agentId);
 
         if (error) {
             console.error("Supabase GET /api/clients fetch error:", error);
@@ -17,12 +24,13 @@ export async function GET() {
     }
 }
 
-// POST a new client or update an existing one
+// POST a new client or update an existing one (scoped to authenticated agent)
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
 
-        // Destructure known potential properties
+        const body = await req.json();
         const { id, name, email, alert_preferences_json, ...restOfBuyBox } = body;
 
         if (!name) {
@@ -30,8 +38,6 @@ export async function POST(req: Request) {
         }
 
         const now = new Date().toISOString();
-
-        // Build the payload of fields to set
         const fields: any = { updated_at: now };
         if (Object.keys(restOfBuyBox).length > 0) {
             fields.buy_box_json = restOfBuyBox;
@@ -43,11 +49,12 @@ export async function POST(req: Request) {
             fields.email = email;
         }
 
-        // Check if a client with this name already exists
+        // Check if this agent already has a client with this name
         const { data: existing, error: findError } = await supabaseAdmin
             .from('clients')
             .select('id')
             .eq('name', name)
+            .eq('agent_id', auth.agentId)
             .maybeSingle();
 
         if (findError) {
@@ -58,18 +65,17 @@ export async function POST(req: Request) {
         let data, error;
 
         if (existing) {
-            // UPDATE the existing client by their UUID
             ({ data, error } = await supabaseAdmin
                 .from('clients')
                 .update(fields)
                 .eq('id', existing.id)
+                .eq('agent_id', auth.agentId)
                 .select()
                 .single());
         } else {
-            // INSERT as a new client
             ({ data, error } = await supabaseAdmin
                 .from('clients')
-                .insert({ name, ...fields })
+                .insert({ name, agent_id: auth.agentId, ...fields })
                 .select()
                 .single());
         }
@@ -80,14 +86,12 @@ export async function POST(req: Request) {
         }
 
         // Trigger morning brief generation for this client in the background
-        // Uses fire-and-forget so the client save isn't slowed down
         if (data?.id) {
-            // Smart URL resolution: prefer explicit env var, but never use localhost in production
             const rawUrl = process.env.NEXT_PUBLIC_APP_URL || "";
             const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
             const appUrl = (rawUrl && !rawUrl.includes("localhost")) ? rawUrl : (vercelUrl || "https://opulentus.vercel.app");
             const cronSecret = process.env.CRON_SECRET || "";
-            fetch(`${appUrl}/api/generate-client-briefs?clientId=${data.id}`, {
+            fetch(`${appUrl}/api/generate-client-briefs?clientId=${data.id}&agentId=${auth.agentId}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

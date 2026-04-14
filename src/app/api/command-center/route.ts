@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from "@/lib/supabase";
+import { requireAgent } from '@/lib/supabase/auth-helpers';
 
 /**
  * COMMAND CENTER — Fully deterministic intent routing + parameter extraction.
  * Zero AI calls. Regex-based parsing handles add/edit/delete/query/blast/search.
+ * All operations are scoped to the authenticated agent.
  */
 
 // ═══════════════════════════════════════
@@ -269,6 +271,10 @@ function parseEditFromText(text: string, existingClientName: string): Record<str
 
 export async function POST(req: Request) {
     try {
+        const auth = await requireAgent();
+        if (auth.error) return auth.error;
+        const agentId = auth.agentId;
+
         const body = await req.json();
         const { prompt } = body;
 
@@ -282,7 +288,7 @@ export async function POST(req: Request) {
         const { intent, clientName } = classifyIntent(prompt);
         console.log(`[Command Center] Intent: ${intent}, Client: ${clientName || "N/A"}`);
 
-        // ═══ STEP 2: EXECUTE INTENT ═══
+        // ═══ STEP 2: EXECUTE INTENT (all scoped to authenticated agent) ═══
         switch (intent) {
 
             // ─── ADD CLIENT (deterministic regex parser) ───
@@ -313,6 +319,7 @@ export async function POST(req: Request) {
                     .from('clients')
                     .select('id')
                     .eq('name', analysis.name)
+                    .eq('agent_id', agentId)
                     .maybeSingle();
 
                 if (findError) throw findError;
@@ -330,7 +337,7 @@ export async function POST(req: Request) {
                 } else {
                     const { data, error } = await supabaseAdmin
                         .from('clients')
-                        .insert({ name: analysis.name, ...fields })
+                        .insert({ name: analysis.name, agent_id: agentId, ...fields })
                         .select()
                         .single();
                     if (error) throw error;
@@ -358,6 +365,7 @@ export async function POST(req: Request) {
                     .from('clients')
                     .select('*')
                     .ilike('name', `%${targetName}%`)
+                    .eq('agent_id', agentId)
                     .limit(1);
 
                 if (!existing || existing.length === 0) {
@@ -403,6 +411,7 @@ export async function POST(req: Request) {
                     .from('clients')
                     .select('id, name')
                     .ilike('name', `%${clientName}%`)
+                    .eq('agent_id', agentId)
                     .limit(1);
 
                 if (!found || found.length === 0) {
@@ -434,6 +443,7 @@ export async function POST(req: Request) {
                     .from('clients')
                     .select('*')
                     .ilike('name', `%${clientName}%`)
+                    .eq('agent_id', agentId)
                     .limit(1);
 
                 if (!clients || clients.length === 0) {

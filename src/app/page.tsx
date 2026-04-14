@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { loadSessions, ChatSession } from "@/lib/chatStore";
 import WatchtowerDrawer from "@/components/WatchtowerDrawer";
 import { loadAllClients, BuyBoxCriteria } from "@/lib/buybox";
-import ClientGate from "@/components/ClientGate";
-import { AnimatePresence } from "framer-motion";
 
 function propertyIcon(propertyType: string): string {
   const t = (propertyType || "").toLowerCase();
@@ -70,11 +68,6 @@ export default function Home() {
   const [searchInput, setSearchInput] = useState("");
   const [commandStatus, setCommandStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [isClientContext, setIsClientContext] = useState(false);
-  const [isUnlocked, setIsUnlocked] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    setIsUnlocked(localStorage.getItem('opulentus_access_master_nick') === 'true');
-  }, []);
 
   // Real-time keyword scanner for Client Context Halo
   useEffect(() => {
@@ -461,17 +454,6 @@ export default function Home() {
         <p className="text-xs font-mono text-muted uppercase tracking-wider">Opulentus • Apify Actors • Gemini AI</p>
       </footer>
       <WatchtowerDrawer isOpen={isWatchtowerOpen} onClose={() => setIsWatchtowerOpen(false)} />
-      
-      {/* Cinematic Authentication Gate */}
-      <AnimatePresence>
-          {isUnlocked === false && (
-              <ClientGate 
-                  clientName="Nick" 
-                  clientId="master_nick" 
-                  onUnlock={() => setIsUnlocked(true)} 
-              />
-          )}
-      </AnimatePresence>
     </div>
   );
 }
