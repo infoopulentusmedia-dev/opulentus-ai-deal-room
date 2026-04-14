@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAgent } from '@/lib/supabase/auth-helpers';
+import { removeClientFromBriefs } from '@/lib/briefs/storage';
 
 /**
  * COMMAND CENTER — Fully deterministic intent routing + parameter extraction.
@@ -424,6 +425,18 @@ export async function POST(req: Request) {
                     .eq('id', found[0].id);
 
                 if (error) throw error;
+
+                // DB cascades ai_analyses + deal_matches via FK, but storage
+                // is out-of-band — prune the brief file + manifest here so we
+                // don't leak orphaned JSON in the briefs bucket (DI-3).
+                try {
+                    await removeClientFromBriefs(agentId, found[0].id);
+                } catch (storageErr: any) {
+                    console.warn(
+                        `[Command Center] Brief cleanup failed for ${found[0].id}:`,
+                        storageErr?.message,
+                    );
+                }
 
                 return NextResponse.json({
                     intent: "delete",
