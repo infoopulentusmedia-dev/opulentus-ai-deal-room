@@ -79,6 +79,30 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* ── Login page animations ───────────────────────────────── */
+@keyframes breathe {
+  0%, 100% { opacity: 0.12; transform: scale(1); }
+  50%       { opacity: 0.28; transform: scale(1.12); }
+}
+
+@keyframes shimmer-gold {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-6px); }
+  30%       { transform: translateX(5px); }
+  45%       { transform: translateX(-4px); }
+  60%       { transform: translateX(3px); }
+  75%       { transform: translateX(-2px); }
+}
+
+.animate-breathe   { animation: breathe 4s ease-in-out infinite; }
+.animate-shake     { animation: shake 0.45s ease-in-out; }
+/* ───────────────────────────────────────────────────────── */
+
 /* Hide scrollbar utility */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
